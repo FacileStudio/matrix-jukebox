@@ -1,3 +1,9 @@
-fn main() {
-    println!("Hello, world!");
+use tracing::info;
+mod logging;
+#[tracing::instrument(ret, err)]
+fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+    logging::init();
+    info!("Hello, world!");
+    Ok(())
 }
