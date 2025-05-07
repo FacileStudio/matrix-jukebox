@@ -8,6 +8,7 @@ color-eyre = "0.6.4"
 eyre = "0.6.12"
 matrix-sdk = { version = "0.11.0", features = ["bundled-sqlite", "rustls-tls"], default-features = false }
 rand = "0.9.1"
+tokio = "1.45.0"
 tracing = "0.1.41"
 tracing-error = "0.2.1"
 tracing-log = "0.2.0"
