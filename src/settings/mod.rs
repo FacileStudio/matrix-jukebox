@@ -8,9 +8,9 @@ mod db;
 mod session;
 use bot::*;
 use client::*;
-use tracing::{error, info, instrument};
-pub use session::*;
 pub use db::*;
+pub use session::*;
+use tracing::{error, info, instrument};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub bot: Bot,

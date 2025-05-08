@@ -3,14 +3,17 @@ use std::path::Path;
 use tracing::{debug, error, info, instrument};
 
 use matrix_sdk::{
-    config::SyncSettings, encryption::CrossSigningResetAuthType, ruma::{
+    Client, ClientBuilder, Error, LoopCtrl, Room, RoomState,
+    config::SyncSettings,
+    encryption::CrossSigningResetAuthType,
+    ruma::{
         api::client::{filter::FilterDefinition, uiaa},
         events::room::{
             member::StrippedRoomMemberEvent,
             message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
         },
         exports::serde_json,
-    }, Client, ClientBuilder, Error, LoopCtrl, Room, RoomState
+    },
 };
 use rand::{Rng, distr::Alphanumeric, rng};
 use tokio::fs;
@@ -140,7 +143,7 @@ async fn persist_sync_token(session_file: &Path, sync_token: String) -> eyre::Re
     fs::write(session_file, serde_json::to_vec(&user_session)?).await?;
     Ok(())
 }
-async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) ->eyre::Result<()>{
+async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) -> eyre::Result<()> {
     // We only want to log text messages in joined rooms.
     if room.state() != RoomState::Joined {
         return Ok(());
@@ -152,10 +155,10 @@ async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) ->eyre
     let room_name = stringify_room_by_name(&room).await;
     debug!(%room_name, %event.sender, text_content.body, "got message");
     if text_content.body.contains("!ping") {
-    let content = RoomMessageEventContent::text_plain("pong!");
-    room.send(content).await?;
+        let content = RoomMessageEventContent::text_plain("pong!");
+        room.send(content).await?;
     }
-Ok(())
+    Ok(())
 }
 
 #[instrument(skip_all)]
@@ -200,9 +203,13 @@ async fn on_stripped_state_member(
     room_member: StrippedRoomMemberEvent,
     client: Client,
     room: Room,
-)  {
-    if room_member.state_key != client.user_id().expect("a logged in client should have a valid user id") {
-        return ;
+) {
+    if room_member.state_key
+        != client
+            .user_id()
+            .expect("a logged in client should have a valid user id")
+    {
+        return;
     }
 
     tokio::spawn(async move {
