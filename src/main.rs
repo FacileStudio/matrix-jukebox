@@ -92,9 +92,7 @@ async fn login(
         .expect("a logged in client should have a session");
     let session = Session {
         user_session: matrix_session,
-        database: Database {
-            passphrase,
-        },
+        database: Database { passphrase },
         sync_token: None,
     };
     let serialized_session = serde_json::to_string(&session)?;
@@ -114,24 +112,23 @@ async fn sync(
 
     if let Some(sync_token) = initial_sync_token {
         sync_settings = sync_settings.token(sync_token);
-        let response = client.sync_once(sync_settings.clone()).await?;
-        sync_settings = sync_settings.token(response.next_batch.clone());
-        persist_sync_token(session_file, response.next_batch).await?;
-        client.add_event_handler(on_room_message);
-        client
-            .sync_with_result_callback(sync_settings, |sync_result| {
+    }
+    let response = client.sync_once(sync_settings.clone()).await?;
+    sync_settings = sync_settings.token(response.next_batch.clone());
+    persist_sync_token(session_file, response.next_batch).await?;
+    client.add_event_handler(on_room_message);
+    client
+        .sync_with_result_callback(sync_settings, |sync_result| {
             async move {
                 let response = sync_result?;
                 // We persist the token each time to be able to restore our session
                 persist_sync_token(session_file, response.next_batch)
                     .await
                     .map_err(|err| Error::UnknownError(err.into()))?;
-
                 Ok(LoopCtrl::Continue)
             }
-            })
-            .await?;
-    }
+        })
+        .await?;
     Ok(())
 }
 #[instrument(level = "debug")]
@@ -176,7 +173,8 @@ async fn first_time_signature_identity_bootstrap(
                     client
                         .user_id()
                         .expect("a logged in client should have a user id")
-                        .to_owned().into(),
+                        .to_owned()
+                        .into(),
                     config.client.password.clone(),
                 );
                 password.session = uiaa.session.clone();
