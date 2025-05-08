@@ -8,7 +8,9 @@ mod db;
 mod session;
 use bot::*;
 use client::*;
-use tracing::{Instrument, error, info, instrument};
+use tracing::{error, info, instrument};
+pub use session::*;
+pub use db::*;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ApplicationConfig {
     pub bot: Bot,
@@ -19,7 +21,7 @@ impl ApplicationConfig {
     #[instrument]
     pub async fn load() -> eyre::Result<Self> {
         const DEFAULT_PATH_LOCATION: &str = "config.yaml";
-        let mut config_path: PathBuf = std::env::var("CONFIG_PATH").unwrap_or_else(|e|{
+        let config_path: PathBuf = std::env::var("CONFIG_PATH").unwrap_or_else(|e|{
             error!(error=%e, "unable to find the environment variable CONFIG_PATH, falling back to the default of {DEFAULT_PATH_LOCATION}");
             DEFAULT_PATH_LOCATION.to_owned()
         }).parse()?;
