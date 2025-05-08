@@ -3,14 +3,14 @@ use std::path::Path;
 use tracing::{debug, error, info, instrument};
 
 use matrix_sdk::{
-    Client, ClientBuilder, Error, LoopCtrl, Room, RoomState,
-    config::SyncSettings,
-    encryption::CrossSigningResetAuthType,
-    ruma::{
+    config::SyncSettings, encryption::CrossSigningResetAuthType, ruma::{
         api::client::{filter::FilterDefinition, uiaa},
-        events::room::message::{MessageType, OriginalSyncRoomMessageEvent},
+        events::room::{
+            member::StrippedRoomMemberEvent,
+            message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+        },
         exports::serde_json,
-    },
+    }, Client, ClientBuilder, Error, LoopCtrl, Room, RoomState
 };
 use rand::{Rng, distr::Alphanumeric, rng};
 use tokio::fs;
@@ -113,6 +113,7 @@ async fn sync(
     if let Some(sync_token) = initial_sync_token {
         sync_settings = sync_settings.token(sync_token);
     }
+    client.add_event_handler(on_stripped_state_member);
     let response = client.sync_once(sync_settings.clone()).await?;
     sync_settings = sync_settings.token(response.next_batch.clone());
     persist_sync_token(session_file, response.next_batch).await?;
@@ -139,25 +140,22 @@ async fn persist_sync_token(session_file: &Path, sync_token: String) -> eyre::Re
     fs::write(session_file, serde_json::to_vec(&user_session)?).await?;
     Ok(())
 }
-async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) {
+async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) ->eyre::Result<()>{
     // We only want to log text messages in joined rooms.
     if room.state() != RoomState::Joined {
-        return;
+        return Ok(());
     }
     let MessageType::Text(text_content) = &event.content.msgtype else {
-        return;
+        return Ok(());
     };
 
-    let room_name = match room.display_name().await {
-        Ok(room_name) => room_name.to_string(),
-        Err(error) => {
-            println!("Error getting room display name: {error}");
-            // Let's fallback to the room ID.
-            room.room_id().to_string()
-        }
-    };
-
+    let room_name = stringify_room_by_name(&room).await;
     debug!(%room_name, %event.sender, text_content.body, "got message");
+    if text_content.body.contains("!ping") {
+    let content = RoomMessageEventContent::text_plain("pong!");
+    room.send(content).await?;
+    }
+Ok(())
 }
 
 #[instrument(skip_all)]
@@ -196,4 +194,35 @@ async fn first_time_signature_identity_bootstrap(
     }
 
     Ok(())
+}
+#[instrument()]
+async fn on_stripped_state_member(
+    room_member: StrippedRoomMemberEvent,
+    client: Client,
+    room: Room,
+)  {
+    if room_member.state_key != client.user_id().expect("a logged in client should have a valid user id") {
+        return ;
+    }
+
+    tokio::spawn(async move {
+        let room_name = stringify_room_by_name(&room).await;
+        info!(room_name, "got invited to room, joining");
+        room.join()
+            .await
+            .expect("unable to not join rooms one was invited to");
+        info!("successfully joined room");
+    });
+}
+#[instrument(level = "debug")]
+async fn stringify_room_by_name(room: &Room) -> String {
+    let room_name = match room.display_name().await {
+        Ok(room_name) => room_name.to_string(),
+        Err(error) => {
+            error!(%error, "error getting room display name");
+            // Let's fallback to the room ID.
+            room.room_id().to_string()
+        }
+    };
+    room_name
 }
