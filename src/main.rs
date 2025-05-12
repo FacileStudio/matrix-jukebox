@@ -8,9 +8,15 @@ use matrix_sdk::{
     encryption::CrossSigningResetAuthType,
     ruma::{
         api::client::{filter::FilterDefinition, uiaa},
-        events::room::{
-            member::StrippedRoomMemberEvent,
-            message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+        events::{
+            call::member::{
+                ActiveFocus, ActiveLivekitFocus, CallMemberEventContent, CallMemberStateKey,
+                SyncCallMemberEvent,
+            },
+            room::{
+                member::StrippedRoomMemberEvent,
+                message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+            },
         },
         exports::serde_json,
     },
@@ -121,6 +127,7 @@ async fn sync(
     sync_settings = sync_settings.token(response.next_batch.clone());
     persist_sync_token(session_file, response.next_batch).await?;
     client.add_event_handler(on_room_message);
+    client.add_event_handler(on_rtc_member_join);
     client
         .sync_with_result_callback(sync_settings, |sync_result| {
             async move {
@@ -232,4 +239,65 @@ async fn stringify_room_by_name(room: &Room) -> String {
         }
     };
     room_name
+}
+#[instrument(skip_all)]
+async fn on_rtc_member_join(
+    member: SyncCallMemberEvent,
+    client: Client,
+    room: Room,
+) -> eyre::Result<()> {
+    info!(?member, "recieved event!");
+    if member.sender()
+        == client
+            .user_id()
+            .expect("a logged in client should have a user id")
+    {
+        return Ok(());
+    }
+    if let SyncCallMemberEvent::Redacted(_) = member {
+        return Ok(());
+    }
+    let member = member
+        .as_original()
+        .expect("can't retrieve original state event from this, perhaps this is a redacted event?");
+    let member_session = match &member.content {
+        CallMemberEventContent::LegacyContent(_) => {
+            error!("we don't support legacy matrix rtc sessions");
+            return Ok(());
+        }
+        CallMemberEventContent::SessionContent(session_membership_data) => session_membership_data,
+        CallMemberEventContent::Empty(_) => {
+            let member_name = member.sender.localpart();
+            info!("{member_name} left the call");
+            return Ok(());
+        }
+        kind => {
+            error!(?kind, "we don't know what to do with this");
+            return Ok(());
+        }
+    };
+    let application = &member_session.application;
+    let device_id = client
+        .device_id()
+        .expect("a logged in client should have a device id");
+    let user_id = client
+        .user_id()
+        .expect("a logged in client should have a user id");
+
+    let foci_prefered = &member_session.foci_preferred;
+    let join_event = CallMemberEventContent::new(
+        application.clone(),
+        device_id.into(),
+        ActiveFocus::Livekit(ActiveLivekitFocus::new()),
+        foci_prefered.to_vec(),
+        None,
+    );
+    let leave_event = CallMemberEventContent::new_empty(None);
+    let state_key = CallMemberStateKey::new(user_id.into(), Some(device_id.into()), true);
+    room.send_state_event_for_key(&state_key, join_event)
+        .await?;
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    room.send_state_event_for_key(&state_key, leave_event)
+        .await?;
+    Ok(())
 }
