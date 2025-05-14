@@ -1,5 +1,5 @@
+use matrix_sdk::{Client, encryption::CrossSigningResetAuthType, ruma::api::client::uiaa};
 use tracing::error;
-use matrix_sdk::{encryption::CrossSigningResetAuthType, ruma::api::client::uiaa, Client};
 use tracing::{info, instrument};
 
 use crate::settings::ApplicationConfig;
@@ -9,7 +9,7 @@ pub async fn first_time_signature_identity_bootstrap(
     config: &ApplicationConfig,
     client: &Client,
 ) -> eyre::Result<()> {
-    info!("Bootstrapping a new cross signing identity, press enter to continue.");
+    info!("Bootstrapping a new cross signing identity");
     if let Some(handle) = client.encryption().reset_cross_signing().await? {
         match handle.auth_type() {
             CrossSigningResetAuthType::Uiaa(uiaa) => {

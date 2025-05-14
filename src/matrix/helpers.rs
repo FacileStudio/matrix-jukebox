@@ -1,7 +1,7 @@
-use tracing::error;
 use std::path::Path;
+use tracing::error;
 
-use matrix_sdk::{ruma::exports::serde_json, Room};
+use matrix_sdk::{Room, ruma::exports::serde_json};
 use tokio::fs;
 use tracing::instrument;
 
@@ -9,15 +9,15 @@ use crate::settings::Session;
 
 #[instrument(level = "debug")]
 pub async fn stringify_room_by_name(room: &Room) -> String {
-    let room_name = match room.display_name().await {
+    
+    match room.display_name().await {
         Ok(room_name) => room_name.to_string(),
         Err(error) => {
             error!(%error, "error getting room display name");
             // Let's fallback to the room ID.
             room.room_id().to_string()
         }
-    };
-    room_name
+    }
 }
 
 #[instrument(level = "debug")]

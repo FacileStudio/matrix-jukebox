@@ -1,11 +1,10 @@
-mod matrix;
 mod logging;
+mod matrix;
 mod settings;
 
 use matrix::{login, restore_session, sync};
 use settings::ApplicationConfig;
 use tracing::{info, instrument};
-
 
 const CLIENT_SESSION_FILE_NAME: &str = "session.json";
 const CLIENT_STORAGE_DB_PATH: &str = "storage.db";
@@ -25,7 +24,5 @@ async fn main() -> eyre::Result<()> {
     };
 
     sync(client, sync_token, &session_file).await?;
-
-    info!("all done!");
     Ok(())
 }

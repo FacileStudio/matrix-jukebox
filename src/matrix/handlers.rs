@@ -1,4 +1,16 @@
-use matrix_sdk::{ruma::events::{call::member::{ActiveFocus, ActiveLivekitFocus, CallMemberEventContent, CallMemberStateKey, SyncCallMemberEvent}, room::{member::StrippedRoomMemberEvent, message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent}}}, Client, Room, RoomState};
+use matrix_sdk::{
+    Client, Room, RoomState,
+    ruma::events::{
+        call::member::{
+            ActiveFocus, ActiveLivekitFocus, CallMemberEventContent, CallMemberStateKey,
+            SyncCallMemberEvent,
+        },
+        room::{
+            member::StrippedRoomMemberEvent,
+            message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+        },
+    },
+};
 use tracing::{debug, error, info, instrument};
 
 use super::helpers::stringify_room_by_name;

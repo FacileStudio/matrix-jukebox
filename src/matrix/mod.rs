@@ -3,16 +3,23 @@ use std::path::Path;
 use encryption::first_time_signature_identity_bootstrap;
 use handlers::{on_room_message, on_rtc_member_join, on_stripped_state_member};
 use helpers::persist_sync_token;
-use matrix_sdk::{config::SyncSettings, ruma::{api::client::filter::FilterDefinition, exports::serde_json}, Client, ClientBuilder, Error, LoopCtrl};
-use rand::{distr::Alphanumeric, rng, Rng};
+use matrix_sdk::{
+    Client, ClientBuilder, Error, LoopCtrl,
+    config::SyncSettings,
+    ruma::{api::client::filter::FilterDefinition, exports::serde_json},
+};
+use rand::{Rng, distr::Alphanumeric, rng};
 use tokio::fs;
 use tracing::{debug, info, instrument};
 
-use crate::{settings::{ApplicationConfig, Database, Session}, CLIENT_STORAGE_DB_PATH};
+use crate::{
+    CLIENT_STORAGE_DB_PATH,
+    settings::{ApplicationConfig, Database, Session},
+};
 
-mod handlers;
-mod encryption;
 mod custom_events;
+mod encryption;
+mod handlers;
 mod helpers;
 #[instrument(skip_all)]
 pub async fn sync(
