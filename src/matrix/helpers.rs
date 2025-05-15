@@ -1,15 +1,13 @@
 use std::path::Path;
-use tracing::error;
+use tracing::{debug, error, instrument};
 
-use matrix_sdk::{Room, ruma::exports::serde_json};
+use matrix_sdk::{ruma::exports::serde_json, Client, ClientBuilder, Room};
 use tokio::fs;
-use tracing::instrument;
 
-use crate::settings::Session;
+use crate::settings::{ApplicationConfig, Session};
 
 #[instrument(level = "debug")]
 pub async fn stringify_room_by_name(room: &Room) -> String {
-    
     match room.display_name().await {
         Ok(room_name) => room_name.to_string(),
         Err(error) => {
@@ -27,4 +25,11 @@ pub async fn persist_sync_token(session_file: &Path, sync_token: String) -> eyre
     user_session.sync_token = Some(sync_token);
     fs::write(session_file, serde_json::to_vec(&user_session)?).await?;
     Ok(())
+}
+#[instrument(skip_all)]
+pub async fn build_client(config: &ApplicationConfig) -> eyre::Result<ClientBuilder> {
+    debug!("building client");
+    Ok(Client::builder()
+        .server_name_or_homeserver_url(&config.client.server_name)
+        .user_agent("jukebox"))
 }

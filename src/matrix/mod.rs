@@ -2,9 +2,9 @@ use std::path::Path;
 
 use encryption::first_time_signature_identity_bootstrap;
 use handlers::{on_room_message, on_rtc_member_join, on_stripped_state_member};
-use helpers::persist_sync_token;
+use helpers::{build_client, persist_sync_token};
 use matrix_sdk::{
-    Client, ClientBuilder, Error, LoopCtrl,
+    Client, Error, LoopCtrl,
     config::SyncSettings,
     ruma::{api::client::filter::FilterDefinition, exports::serde_json},
 };
@@ -73,13 +73,6 @@ pub async fn restore_session(
     Ok((client, session.sync_token))
 }
 
-#[instrument(skip_all)]
-async fn build_client(config: &ApplicationConfig) -> eyre::Result<ClientBuilder> {
-    debug!("building client");
-    Ok(Client::builder()
-        .homeserver_url(&config.client.homeserver_url)
-        .user_agent("jukebox"))
-}
 #[instrument(skip(config))]
 pub async fn login(
     config: &ApplicationConfig,
