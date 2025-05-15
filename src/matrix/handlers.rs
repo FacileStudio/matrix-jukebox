@@ -13,7 +13,7 @@ use matrix_sdk::{
 };
 use tracing::{debug, error, info, instrument};
 
-use super::helpers::stringify_room_by_name;
+use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
 
 pub async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) -> eyre::Result<()> {
     // We only want to log text messages in joined rooms.
@@ -112,8 +112,14 @@ pub async fn on_rtc_member_join(
     let state_key = CallMemberStateKey::new(user_id.into(), Some(device_id.into()), true);
     room.send_state_event_for_key(&state_key, join_event)
         .await?;
+    room.add_event_handler(on_rtc_encryption_key_changed_event);
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     room.send_state_event_for_key(&state_key, leave_event)
         .await?;
     Ok(())
+}
+#[instrument]
+pub async fn on_rtc_encryption_key_changed_event(event: EncryptionKeysChangedEvent, room: Room) {
+    let room_name = stringify_room_by_name(&room).await;
+    info!(?event, room_name, "got this event. What next?");
 }

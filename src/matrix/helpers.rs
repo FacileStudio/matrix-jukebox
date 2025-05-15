@@ -1,7 +1,7 @@
 use std::path::Path;
 use tracing::{debug, error, instrument};
 
-use matrix_sdk::{ruma::exports::serde_json, Client, ClientBuilder, Room};
+use matrix_sdk::{Client, ClientBuilder, Room, ruma::exports::serde_json};
 use tokio::fs;
 
 use crate::settings::{ApplicationConfig, Session};
