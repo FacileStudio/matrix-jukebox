@@ -1,7 +1,8 @@
-use std::path::Path;
+use serde::{Deserialize, Serialize};
+use std::{path::Path, time::Duration};
 use tracing::{debug, error, instrument};
 
-use matrix_sdk::{Client, ClientBuilder, Room, ruma::exports::serde_json};
+use matrix_sdk::{Client, ClientBuilder, Room, reqwest::Url, ruma::exports::serde_json};
 use tokio::fs;
 
 use crate::settings::{ApplicationConfig, Session};
@@ -32,4 +33,50 @@ pub async fn build_client(config: &ApplicationConfig) -> eyre::Result<ClientBuil
     Ok(Client::builder()
         .server_name_or_homeserver_url(&config.client.server_name)
         .user_agent("jukebox"))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
+pub enum PreferedFocus {
+    Livekit(LivekitInformation),
+}
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LivekitInformation {
+    #[serde(rename = "livekit_service_url")]
+    pub url: String,
+}
+#[derive(Debug, Serialize, Deserialize)]
+// #[serde(transparent)]
+pub struct PreferedFoci {
+    #[serde(rename = "org.matrix.msc4143.rtc_foci")]
+    pub list: Vec<PreferedFocus>,
+}
+pub async fn get_prefered_foci(
+    client: &Client,
+    config: &ApplicationConfig,
+) -> eyre::Result<PreferedFoci> {
+    let client = client.http_client();
+    let url = if !config.client.server_name.starts_with("http")
+        || !config.client.server_name.starts_with("https")
+    {
+        let mut value = config.client.server_name.clone();
+        value.insert_str(0, "https");
+        value
+    } else {
+        config.client.server_name.clone()
+    };
+    let mut url = Url::parse(&url)?;
+    url.set_path(".well-known/matrix/client");
+    Ok(serde_json::from_slice::<PreferedFoci>(
+        &client
+            .get(url)
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await?
+            .error_for_status()?
+            .bytes()
+            .await?,
+    )?)
 }

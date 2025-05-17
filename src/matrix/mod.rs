@@ -2,7 +2,7 @@ use std::path::Path;
 
 use encryption::first_time_signature_identity_bootstrap;
 use handlers::{on_room_message, on_rtc_member_join, on_stripped_state_member};
-use helpers::{build_client, persist_sync_token};
+use helpers::{build_client, get_prefered_foci, persist_sync_token};
 use matrix_sdk::{
     Client, Error, LoopCtrl,
     config::SyncSettings,
@@ -26,7 +26,11 @@ pub async fn sync(
     client: Client,
     initial_sync_token: Option<String>,
     session_file: &Path,
+    config: &ApplicationConfig,
 ) -> eyre::Result<()> {
+    let foci_list = get_prefered_foci(&client, config).await?;
+    dbg!(foci_list);
+
     let filter = FilterDefinition::with_lazy_loading();
 
     let mut sync_settings = SyncSettings::default().filter(filter.into());
