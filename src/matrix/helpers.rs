@@ -2,7 +2,11 @@ use serde::{Deserialize, Serialize};
 use std::{path::Path, time::Duration};
 use tracing::{debug, error, instrument};
 
-use matrix_sdk::{Client, ClientBuilder, Room, reqwest::Url, ruma::exports::serde_json};
+use matrix_sdk::{
+    Client, ClientBuilder, Room,
+    reqwest::Url,
+    ruma::{api::client::account::request_openid_token, exports::serde_json},
+};
 use tokio::fs;
 
 use crate::settings::{ApplicationConfig, Session};
@@ -79,4 +83,14 @@ pub async fn get_prefered_foci(
             .bytes()
             .await?,
     )?)
+}
+
+pub async fn get_openid_token(client: &Client) -> eyre::Result<request_openid_token::v3::Response> {
+    let request = request_openid_token::v3::Request::new(
+        client
+            .user_id()
+            .expect("a logged in client should have a user id")
+            .into(),
+    );
+    Ok(client.send(request).await?)
 }
