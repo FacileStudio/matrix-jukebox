@@ -3,7 +3,7 @@ use matrix_sdk::{
     ruma::events::{
         call::member::{
             ActiveFocus, ActiveLivekitFocus, CallMemberEventContent, CallMemberStateKey,
-            SyncCallMemberEvent,
+            OriginalSyncCallMemberEvent,
         },
         room::{
             member::StrippedRoomMemberEvent,
@@ -58,24 +58,18 @@ pub async fn on_stripped_state_member(
 }
 #[instrument(skip_all)]
 pub async fn on_rtc_member_join(
-    member: SyncCallMemberEvent,
+    member: OriginalSyncCallMemberEvent,
     client: Client,
     room: Room,
 ) -> eyre::Result<()> {
     info!(?member, "recieved event!");
-    if member.sender()
+    if member.sender
         == client
             .user_id()
             .expect("a logged in client should have a user id")
     {
         return Ok(());
     }
-    if let SyncCallMemberEvent::Redacted(_) = member {
-        return Ok(());
-    }
-    let member = member
-        .as_original()
-        .expect("can't retrieve original state event from this, perhaps this is a redacted event?");
     let member_session = match &member.content {
         CallMemberEventContent::LegacyContent(_) => {
             error!("we don't support legacy matrix rtc sessions");
@@ -112,14 +106,16 @@ pub async fn on_rtc_member_join(
     let state_key = CallMemberStateKey::new(user_id.into(), Some(device_id.into()), true);
     room.send_state_event_for_key(&state_key, join_event)
         .await?;
-    room.add_event_handler(on_rtc_encryption_key_changed_event);
+    client.add_event_handler(on_rtc_encryption_key_changed_event);
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
     room.send_state_event_for_key(&state_key, leave_event)
         .await?;
     Ok(())
 }
 #[instrument]
-pub async fn on_rtc_encryption_key_changed_event(event: EncryptionKeysChangedEvent, room: Room) {
-    let room_name = stringify_room_by_name(&room).await;
-    info!(?event, room_name, "got this event. What next?");
+pub async fn on_rtc_encryption_key_changed_event(
+    event: EncryptionKeysChangedEvent,
+    client: Client,
+) {
+    info!(?event, "got this event. What next?");
 }

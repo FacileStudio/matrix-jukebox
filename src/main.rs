@@ -22,6 +22,7 @@ async fn main() -> eyre::Result<()> {
     } else {
         (login(&config, data_dir, &session_file).await?, None)
     };
+
     sync(client, sync_token, &session_file, &config).await?;
     Ok(())
 }
