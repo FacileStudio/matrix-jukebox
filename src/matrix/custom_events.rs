@@ -1,3 +1,4 @@
+use matrix_sdk::ruma::OwnedRoomId;
 use matrix_sdk::ruma::events::macros::EventContent;
 use matrix_sdk::ruma::{OwnedDeviceId, events::call::member::Application};
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,7 @@ pub struct EncryptionKeysChangedEventContent {
     pub key: Key,
     #[serde(rename = "session")]
     pub application: Application,
+    pub room_id: OwnedRoomId,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Key {
