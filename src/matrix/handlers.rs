@@ -11,7 +11,7 @@ use matrix_sdk::{
         },
     },
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
 
@@ -117,5 +117,5 @@ pub async fn on_rtc_encryption_key_changed_event(
     event: EncryptionKeysChangedEvent,
     client: Client,
 ) {
-    info!(?event, "got this event. What next?");
+    warn!(?event, "nothing doable with this event yet");
 }
