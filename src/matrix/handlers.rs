@@ -8,6 +8,7 @@ use matrix_sdk::{
         room::{
             member::StrippedRoomMemberEvent,
             message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+            tombstone::OriginalSyncRoomTombstoneEvent,
         },
     },
 };
@@ -118,4 +119,21 @@ pub async fn on_rtc_encryption_key_changed_event(
     client: Client,
 ) {
     warn!(?event, "nothing doable with this event yet");
+}
+
+#[instrument(skip_all)]
+pub async fn on_room_upgrade(
+    tombstone: OriginalSyncRoomTombstoneEvent,
+    client: Client,
+    room: Room,
+) -> eyre::Result<()> {
+    let alias = room
+        .canonical_alias()
+        .map_or_else(|| "no alias provided".to_owned(), |id| id.to_string());
+    let id = room.room_id();
+    info!(%alias, %id, reasone=tombstone.content.body, "joining new room as this one was upgraded");
+    client
+        .join_room_by_id(&tombstone.content.replacement_room)
+        .await?;
+    Ok(())
 }

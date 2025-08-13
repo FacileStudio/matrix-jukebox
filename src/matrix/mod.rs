@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use encryption::first_time_signature_identity_bootstrap;
-use handlers::{on_room_message, on_rtc_member_join, on_stripped_state_member};
+use handlers::{on_room_message, on_room_upgrade, on_rtc_member_join, on_stripped_state_member};
 use helpers::{build_client, get_openid_token, get_prefered_foci, persist_sync_token};
 use matrix_sdk::{
     Client, Error, LoopCtrl,
@@ -46,6 +46,7 @@ pub async fn sync(
     persist_sync_token(session_file, response.next_batch).await?;
     client.add_event_handler(on_room_message);
     client.add_event_handler(on_rtc_member_join);
+    client.add_event_handler(on_room_upgrade);
     client
         .sync_with_result_callback(sync_settings, |sync_result| {
             async move {
