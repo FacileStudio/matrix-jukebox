@@ -5,10 +5,7 @@ use tracing_log::LogTracer;
 use tracing_subscriber::{EnvFilter, prelude::*};
 use tracing_tree::HierarchicalLayer;
 
-#[cfg(not(debug_assertions))]
-const DEFAULT_LOG_FILTER: &str = "none";
-#[cfg(debug_assertions)]
-const DEFAULT_LOG_FILTER: &str = "debug";
+const DEFAULT_LOG_FILTER: &str = "error";
 
 /// Initialise the logging stack.
 pub fn init() {
