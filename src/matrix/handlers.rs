@@ -2,7 +2,8 @@ use matrix_sdk::{
     Client, Room, RoomState,
     ruma::events::{
         call::member::{
-            ActiveFocus, ActiveLivekitFocus, CallMemberEventContent, CallMemberStateKey,
+            ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
+            CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
             OriginalSyncCallMemberEvent,
         },
         room::{
@@ -12,7 +13,9 @@ use matrix_sdk::{
         },
     },
 };
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
+
+use crate::matrix::helpers::{PreferedFocus, get_prefered_foci};
 
 use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
 
@@ -87,20 +90,35 @@ pub async fn on_rtc_member_join(
             return Ok(());
         }
     };
-    let application = &member_session.application;
+
+    let our_foci_list = get_prefered_foci(&client)
+        .await?
+        .list
+        .into_iter()
+        .filter_map(|elem| {
+            let PreferedFocus::Livekit(livekit_info) = elem else {
+                return None;
+            };
+            Some(Focus::Livekit(LivekitFocus::new(
+                "".to_string(),
+                livekit_info.url,
+            )))
+        });
     let device_id = client
         .device_id()
         .expect("a logged in client should have a device id");
     let user_id = client
         .user_id()
         .expect("a logged in client should have a user id");
-
-    let foci_prefered = &member_session.foci_preferred;
+    let application =
+        Application::Call(CallApplicationContent::new("".to_string(), CallScope::Room));
+    let given_foci_prefered = member_session.foci_preferred.clone();
+    let complete_foci_list = our_foci_list.chain(given_foci_prefered).collect();
     let join_event = CallMemberEventContent::new(
-        application.clone(),
+        application,
         device_id.into(),
         ActiveFocus::Livekit(ActiveLivekitFocus::new()),
-        foci_prefered.to_vec(),
+        complete_foci_list,
         None,
     );
     let leave_event = CallMemberEventContent::new_empty(None);
@@ -118,7 +136,7 @@ pub async fn on_rtc_encryption_key_changed_event(
     event: EncryptionKeysChangedEvent,
     client: Client,
 ) {
-    warn!(?event, "nothing doable with this event yet");
+    error!(?event, "nothing doable with this event yet");
 }
 
 #[instrument(skip_all)]

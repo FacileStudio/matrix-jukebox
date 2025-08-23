@@ -4,7 +4,6 @@ use tracing::{debug, error, instrument};
 
 use matrix_sdk::{
     Client, ClientBuilder, Room,
-    reqwest::Url,
     ruma::{api::client::account::request_openid_token, exports::serde_json},
 };
 use tokio::fs;
@@ -44,6 +43,8 @@ pub async fn build_client(config: &ApplicationConfig) -> eyre::Result<ClientBuil
 #[serde(rename_all = "camelCase")]
 pub enum PreferedFocus {
     Livekit(LivekitInformation),
+    #[serde(untagged)]
+    Unknown(String),
 }
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,26 +53,13 @@ pub struct LivekitInformation {
     pub url: String,
 }
 #[derive(Debug, Serialize, Deserialize)]
-// #[serde(transparent)]
 pub struct PreferedFoci {
     #[serde(rename = "org.matrix.msc4143.rtc_foci")]
     pub list: Vec<PreferedFocus>,
 }
-pub async fn get_prefered_foci(
-    client: &Client,
-    config: &ApplicationConfig,
-) -> eyre::Result<PreferedFoci> {
+pub async fn get_prefered_foci(client: &Client) -> eyre::Result<PreferedFoci> {
+    let mut url = client.homeserver();
     let client = client.http_client();
-    let url = if !config.client.server_name.starts_with("http")
-        || !config.client.server_name.starts_with("https")
-    {
-        let mut value = config.client.server_name.clone();
-        value.insert_str(0, "https");
-        value
-    } else {
-        config.client.server_name.clone()
-    };
-    let mut url = Url::parse(&url)?;
     url.set_path(".well-known/matrix/client");
     Ok(serde_json::from_slice::<PreferedFoci>(
         &client
