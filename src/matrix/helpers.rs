@@ -75,8 +75,8 @@ pub struct OpenIDTokenResponse {
     matrix_server_name: OwnedServerName,
 }
 #[derive(Deserialize, Debug)]
-pub struct LivekitTokenResponse{
-    #[serde(rename="jwt")]
+pub struct LivekitTokenResponse {
+    #[serde(rename = "jwt")]
     pub token: String,
     pub url: Url,
 }

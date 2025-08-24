@@ -101,18 +101,13 @@ pub async fn on_rtc_member_join(
     };
     let livekit_service_url = Url::parse(&livekit_info.url)?;
     let token_response = get_openid_token(&client).await?;
-    let livekit_token = get_livekit_token(&client, &room, token_response, livekit_service_url).await?;
+    let livekit_token =
+        get_livekit_token(&client, &room, token_response, livekit_service_url.clone()).await?;
     dbg!(livekit_token);
-    let our_foci_list = prefered_foci.list.into_iter().filter_map(|elem| {
-        let PreferedFocus::Livekit(livekit_info) = elem else {
-            error!(element=?elem, "focus is not of type livekit");
-            return None;
-        };
-        Some(Focus::Livekit(LivekitFocus::new(
-            room.room_id().to_string(),
-            livekit_info.url,
-        )))
-    });
+    let our_prefered_focus = Focus::Livekit(LivekitFocus::new(
+        room.room_id().to_string(),
+        livekit_service_url.to_string(),
+    ));
     let device_id = client
         .device_id()
         .expect("a logged in client should have a device id");
@@ -121,8 +116,8 @@ pub async fn on_rtc_member_join(
         .expect("a logged in client should have a user id");
     let application =
         Application::Call(CallApplicationContent::new("".to_string(), CallScope::Room));
-    let given_foci_prefered = member_session.foci_preferred.clone();
-    let complete_foci_list = our_foci_list.chain(given_foci_prefered).collect();
+    let mut complete_foci_list = member_session.foci_preferred.clone();
+    complete_foci_list.insert(0, our_prefered_focus);
     let join_event = CallMemberEventContent::new(
         application,
         device_id.into(),

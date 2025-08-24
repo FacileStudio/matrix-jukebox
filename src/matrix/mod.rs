@@ -27,9 +27,6 @@ pub async fn sync(
     initial_sync_token: Option<String>,
     session_file: &Path,
 ) -> eyre::Result<()> {
-    let token_response = get_openid_token(&client).await?;
-    dbg!(token_response);
-
     let filter = FilterDefinition::with_lazy_loading();
 
     let mut sync_settings = SyncSettings::default().filter(filter.into());
