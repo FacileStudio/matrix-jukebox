@@ -74,6 +74,12 @@ pub struct OpenIDTokenResponse {
     token_type: TokenType,
     matrix_server_name: OwnedServerName,
 }
+#[derive(Deserialize, Debug)]
+pub struct LivekitTokenResponse{
+    #[serde(rename="jwt")]
+    pub token: String,
+    pub url: Url,
+}
 impl From<request_openid_token::v3::Response> for OpenIDTokenResponse {
     fn from(value: request_openid_token::v3::Response) -> Self {
         Self {
@@ -114,8 +120,13 @@ pub async fn get_livekit_token(
     room: &Room,
     token_response: OpenIDTokenResponse,
     livekit_service_url: Url,
-) -> eyre::Result<serde_json::Value> {
-    let livekit_service_url = livekit_service_url.join("/sfu/get")?;
+) -> eyre::Result<LivekitTokenResponse> {
+    let mut livekit_service_url = livekit_service_url;
+    livekit_service_url
+        .path_segments_mut()
+        .expect("url cannot be a base without a path")
+        .push("sfu")
+        .push("get");
     let request = LivekitJwtRequest {
         device_id: client
             .device_id()
@@ -124,7 +135,7 @@ pub async fn get_livekit_token(
         room: room.room_id().to_string(),
         openid_token: token_response,
     };
-    let jwt_service_response: &[u8] = &client
+    let jwt_service_response_bytes: &[u8] = &client
         .http_client()
         .post(livekit_service_url)
         .header("content-type", "application/json")
@@ -136,5 +147,5 @@ pub async fn get_livekit_token(
         .bytes()
         .await?;
 
-    Ok(jwt_service_response.into())
+    Ok(serde_json::from_slice(jwt_service_response_bytes)?)
 }

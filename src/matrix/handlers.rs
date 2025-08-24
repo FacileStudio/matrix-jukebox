@@ -1,5 +1,6 @@
 use matrix_sdk::{
     Client, Room, RoomState,
+    reqwest::Url,
     ruma::events::{
         call::member::{
             ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
@@ -15,7 +16,9 @@ use matrix_sdk::{
 };
 use tracing::{debug, error, info, instrument};
 
-use crate::matrix::helpers::{get_prefered_foci, PreferedFocus};
+use crate::matrix::helpers::{
+    PreferedFocus, get_livekit_token, get_openid_token, get_prefered_foci,
+};
 
 use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
 
@@ -91,20 +94,25 @@ pub async fn on_rtc_member_join(
         }
     };
 
-    let our_foci_list = get_prefered_foci(&client)
-        .await?
-        .list
-        .into_iter()
-        .filter_map(|elem| {
-            let PreferedFocus::Livekit(livekit_info) = elem else {
-                error!(element=?elem, "focus is not of type livekit");
-                return None;
-            };
-            Some(Focus::Livekit(LivekitFocus::new(
-                room.room_id().to_string(),
-                livekit_info.url,
-            )))
-        });
+    let prefered_foci = get_prefered_foci(&client).await?;
+    let PreferedFocus::Livekit(livekit_info) = prefered_foci.list.first().unwrap() else {
+        error!("first focus in the prefered foci list is not a livekit SFU");
+        return Ok(());
+    };
+    let livekit_service_url = Url::parse(&livekit_info.url)?;
+    let token_response = get_openid_token(&client).await?;
+    let livekit_token = get_livekit_token(&client, &room, token_response, livekit_service_url).await?;
+    dbg!(livekit_token);
+    let our_foci_list = prefered_foci.list.into_iter().filter_map(|elem| {
+        let PreferedFocus::Livekit(livekit_info) = elem else {
+            error!(element=?elem, "focus is not of type livekit");
+            return None;
+        };
+        Some(Focus::Livekit(LivekitFocus::new(
+            room.room_id().to_string(),
+            livekit_info.url,
+        )))
+    });
     let device_id = client
         .device_id()
         .expect("a logged in client should have a device id");
