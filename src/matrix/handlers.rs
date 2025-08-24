@@ -15,7 +15,7 @@ use matrix_sdk::{
 };
 use tracing::{debug, error, info, instrument};
 
-use crate::matrix::helpers::{PreferedFocus, get_prefered_foci};
+use crate::matrix::helpers::{get_prefered_foci, PreferedFocus};
 
 use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
 

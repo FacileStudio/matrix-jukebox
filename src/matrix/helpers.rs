@@ -3,8 +3,12 @@ use std::{path::Path, time::Duration};
 use tracing::{debug, error, instrument};
 
 use matrix_sdk::{
-    Client, ClientBuilder, Room,
-    ruma::{api::client::account::request_openid_token, exports::serde_json},
+    Client, ClientBuilder, OwnedServerName, Room,
+    reqwest::Url,
+    ruma::{
+        OwnedDeviceId, api::client::account::request_openid_token, authentication::TokenType,
+        exports::serde_json,
+    },
 };
 use tokio::fs;
 
@@ -57,6 +61,29 @@ pub struct PreferedFoci {
     #[serde(rename = "org.matrix.msc4143.rtc_foci")]
     pub list: Vec<PreferedFocus>,
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LivekitJwtRequest {
+    device_id: OwnedDeviceId,
+    room: String,
+    openid_token: OpenIDTokenResponse,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct OpenIDTokenResponse {
+    access_token: String,
+    expires_in: Duration,
+    token_type: TokenType,
+    matrix_server_name: OwnedServerName,
+}
+impl From<request_openid_token::v3::Response> for OpenIDTokenResponse {
+    fn from(value: request_openid_token::v3::Response) -> Self {
+        Self {
+            access_token: value.access_token,
+            expires_in: value.expires_in,
+            token_type: value.token_type,
+            matrix_server_name: value.matrix_server_name,
+        }
+    }
+}
 pub async fn get_prefered_foci(client: &Client) -> eyre::Result<PreferedFoci> {
     let mut url = client.homeserver();
     let client = client.http_client();
@@ -73,12 +100,41 @@ pub async fn get_prefered_foci(client: &Client) -> eyre::Result<PreferedFoci> {
     )?)
 }
 
-pub async fn get_openid_token(client: &Client) -> eyre::Result<request_openid_token::v3::Response> {
+pub async fn get_openid_token(client: &Client) -> eyre::Result<OpenIDTokenResponse> {
     let request = request_openid_token::v3::Request::new(
         client
             .user_id()
             .expect("a logged in client should have a user id")
             .into(),
     );
-    Ok(client.send(request).await?)
+    Ok(client.send(request).await?.into())
+}
+pub async fn get_livekit_token(
+    client: &Client,
+    room: &Room,
+    token_response: OpenIDTokenResponse,
+    livekit_service_url: Url,
+) -> eyre::Result<serde_json::Value> {
+    let livekit_service_url = livekit_service_url.join("/sfu/get")?;
+    let request = LivekitJwtRequest {
+        device_id: client
+            .device_id()
+            .expect("a logged in client should have a device id")
+            .into(),
+        room: room.room_id().to_string(),
+        openid_token: token_response,
+    };
+    let jwt_service_response: &[u8] = &client
+        .http_client()
+        .post(livekit_service_url)
+        .header("content-type", "application/json")
+        .timeout(Duration::from_secs(10))
+        .body(serde_json::to_string(&request)?)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+
+    Ok(jwt_service_response.into())
 }
