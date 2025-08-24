@@ -97,10 +97,11 @@ pub async fn on_rtc_member_join(
         .into_iter()
         .filter_map(|elem| {
             let PreferedFocus::Livekit(livekit_info) = elem else {
+                error!(element=?elem, "focus is not of type livekit");
                 return None;
             };
             Some(Focus::Livekit(LivekitFocus::new(
-                "".to_string(),
+                room.room_id().to_string(),
                 livekit_info.url,
             )))
         });
