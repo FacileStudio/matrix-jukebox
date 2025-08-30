@@ -2,7 +2,7 @@ use std::path::Path;
 
 use encryption::first_time_signature_identity_bootstrap;
 use handlers::{on_room_message, on_room_upgrade, on_rtc_member_join, on_stripped_state_member};
-use helpers::{build_client, get_openid_token, persist_sync_token};
+use helpers::{build_client, persist_sync_token};
 use matrix_sdk::{
     Client, Error, LoopCtrl,
     config::SyncSettings,

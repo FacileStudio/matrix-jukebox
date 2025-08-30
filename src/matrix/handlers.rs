@@ -20,7 +20,10 @@ use crate::matrix::helpers::{
     PreferedFocus, get_livekit_token, get_openid_token, get_prefered_foci,
 };
 
-use super::{custom_events::EncryptionKeysChangedEvent, helpers::stringify_room_by_name};
+use super::{
+    custom_events::EncryptionKeysChangedEvent,
+    helpers::{MatrixToLivekitMembership, stringify_room_by_name},
+};
 
 pub async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) -> eyre::Result<()> {
     // We only want to log text messages in joined rooms.
@@ -140,7 +143,16 @@ pub async fn on_rtc_encryption_key_changed_event(
     event: EncryptionKeysChangedEvent,
     client: Client,
 ) {
-    error!(?event, "nothing doable with this event yet");
+    let room_id = event.content.room_id;
+    let user_id = event.sender;
+    let device_id = event.content.member.claimed_device_id;
+    let livekit_identity = MatrixToLivekitMembership::new(user_id, device_id);
+    info!(
+        "in room {}, livekit member {} has key {}",
+        room_id,
+        livekit_identity.to_string(),
+        event.content.key.content
+    );
 }
 
 #[instrument(skip_all)]

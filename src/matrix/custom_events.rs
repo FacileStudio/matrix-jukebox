@@ -19,7 +19,7 @@ pub struct Key {
     index: usize,
     //I'm not sure if this comes as utf-8 over the wire, but it doesn't come as an array of bytes apparently, looking at events from the show source view of element, after toggling the show unknown events checkbox. Thoughts?
     #[serde(rename = "key")]
-    content: String,
+    pub content: String,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Member {

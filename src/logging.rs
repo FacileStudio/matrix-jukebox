@@ -5,7 +5,7 @@ use tracing_log::LogTracer;
 use tracing_subscriber::{EnvFilter, prelude::*};
 use tracing_tree::HierarchicalLayer;
 
-const DEFAULT_LOG_FILTER: &str = "matrix-jukebox=info,warn";
+const DEFAULT_LOG_FILTER: &str = "matrix-jukebox=debug,warn";
 
 /// Initialise the logging stack.
 pub fn init() {

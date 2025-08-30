@@ -6,8 +6,8 @@ use matrix_sdk::{
     Client, ClientBuilder, OwnedServerName, Room,
     reqwest::Url,
     ruma::{
-        OwnedDeviceId, api::client::account::request_openid_token, authentication::TokenType,
-        exports::serde_json,
+        OwnedDeviceId, OwnedUserId, api::client::account::request_openid_token,
+        authentication::TokenType, exports::serde_json,
     },
 };
 use tokio::fs;
@@ -148,4 +148,32 @@ pub async fn get_livekit_token(
         .await?;
 
     Ok(serde_json::from_slice(jwt_service_response_bytes)?)
+}
+
+pub struct MatrixToLivekitMembership {
+    user_id: OwnedUserId,
+    device_id: OwnedDeviceId,
+}
+
+impl MatrixToLivekitMembership {
+    pub fn new(user_id: OwnedUserId, device_id: OwnedDeviceId) -> Self {
+        Self { user_id, device_id }
+    }
+
+    pub fn user_id(&self) -> &str {
+        self.user_id.as_ref()
+    }
+
+    pub fn device_id(&self) -> &str {
+        self.device_id.as_ref()
+    }
+}
+impl ToString for MatrixToLivekitMembership {
+    fn to_string(&self) -> String {
+        format!(
+            "{}:{}",
+            self.user_id.to_string(),
+            self.device_id.to_string()
+        )
+    }
 }
