@@ -6,8 +6,16 @@ edition = "2024"
 [dependencies]
 color-eyre = "0.6.4"
 eyre = "0.6.12"
-matrix-sdk = { version = "0.12.0", features = ["bundled-sqlite", "e2e-encryption", "eyre", "rustls-tls"], default-features = false }
-rand = "0.9.1"
+livekit = { version = "0.7.24", features = ["native-tls"] }
+
+matrix-sdk = { version = "0.14.0", features = [
+    "bundled-sqlite",
+    "e2e-encryption",
+    "eyre",
+    "rustls-tls",
+], default-features = false }
+rand = "0.9.2"
+rodio = { version = "0.21.1", features = ["noise"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_yaml = "0.9.34"
 tokio = "1.45.0"

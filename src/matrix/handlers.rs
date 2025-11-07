@@ -1,29 +1,14 @@
 use matrix_sdk::{
     Client, Room, RoomState,
-    reqwest::Url,
-    ruma::events::{
-        call::member::{
-            ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
-            CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
-            OriginalSyncCallMemberEvent,
-        },
-        room::{
-            member::StrippedRoomMemberEvent,
-            message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
-            tombstone::OriginalSyncRoomTombstoneEvent,
-        },
+    ruma::events::room::{
+        member::StrippedRoomMemberEvent,
+        message::{MessageType, OriginalSyncRoomMessageEvent, RoomMessageEventContent},
+        tombstone::OriginalSyncRoomTombstoneEvent,
     },
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, info, instrument};
 
-use crate::matrix::helpers::{
-    PreferedFocus, get_livekit_token, get_openid_token, get_prefered_foci,
-};
-
-use super::{
-    custom_events::EncryptionKeysChangedEvent,
-    helpers::{MatrixToLivekitMembership, stringify_room_by_name},
-};
+use super::helpers::stringify_room_by_name;
 
 pub async fn on_room_message(event: OriginalSyncRoomMessageEvent, room: Room) -> eyre::Result<()> {
     // We only want to log text messages in joined rooms.
@@ -65,94 +50,6 @@ pub async fn on_stripped_state_member(
             .expect("unable to not join rooms one was invited to");
         info!("successfully joined room");
     });
-}
-#[instrument(skip_all)]
-pub async fn on_rtc_member_join(
-    member: OriginalSyncCallMemberEvent,
-    client: Client,
-    room: Room,
-) -> eyre::Result<()> {
-    info!(?member, "recieved event!");
-    if member.sender
-        == client
-            .user_id()
-            .expect("a logged in client should have a user id")
-    {
-        return Ok(());
-    }
-    let member_session = match &member.content {
-        CallMemberEventContent::LegacyContent(_) => {
-            error!("we don't support legacy matrix rtc sessions");
-            return Ok(());
-        }
-        CallMemberEventContent::SessionContent(session_membership_data) => session_membership_data,
-        CallMemberEventContent::Empty(_) => {
-            let member_name = member.sender.localpart();
-            info!("{member_name} left the call");
-            return Ok(());
-        }
-        kind => {
-            error!(?kind, "we don't know what to do with this");
-            return Ok(());
-        }
-    };
-
-    let prefered_foci = get_prefered_foci(&client).await?;
-    let PreferedFocus::Livekit(livekit_info) = prefered_foci.list.first().unwrap() else {
-        error!("first focus in the prefered foci list is not a livekit SFU");
-        return Ok(());
-    };
-    let livekit_service_url = Url::parse(&livekit_info.url)?;
-    let token_response = get_openid_token(&client).await?;
-    let livekit_token =
-        get_livekit_token(&client, &room, token_response, livekit_service_url.clone()).await?;
-    dbg!(livekit_token);
-    let our_prefered_focus = Focus::Livekit(LivekitFocus::new(
-        room.room_id().to_string(),
-        livekit_service_url.to_string(),
-    ));
-    let device_id = client
-        .device_id()
-        .expect("a logged in client should have a device id");
-    let user_id = client
-        .user_id()
-        .expect("a logged in client should have a user id");
-    let application =
-        Application::Call(CallApplicationContent::new("".to_string(), CallScope::Room));
-    let mut complete_foci_list = member_session.foci_preferred.clone();
-    complete_foci_list.insert(0, our_prefered_focus);
-    let join_event = CallMemberEventContent::new(
-        application,
-        device_id.into(),
-        ActiveFocus::Livekit(ActiveLivekitFocus::new()),
-        complete_foci_list,
-        None,
-    );
-    let leave_event = CallMemberEventContent::new_empty(None);
-    let state_key = CallMemberStateKey::new(user_id.into(), Some(device_id.into()), true);
-    room.send_state_event_for_key(&state_key, join_event)
-        .await?;
-    client.add_event_handler(on_rtc_encryption_key_changed_event);
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
-    room.send_state_event_for_key(&state_key, leave_event)
-        .await?;
-    Ok(())
-}
-#[instrument]
-pub async fn on_rtc_encryption_key_changed_event(
-    event: EncryptionKeysChangedEvent,
-    client: Client,
-) {
-    let room_id = event.content.room_id;
-    let user_id = event.sender;
-    let device_id = event.content.member.claimed_device_id;
-    let livekit_identity = MatrixToLivekitMembership::new(user_id, device_id);
-    info!(
-        "in room {}, livekit member {} has key {}",
-        room_id,
-        livekit_identity.to_string(),
-        event.content.key.content
-    );
 }
 
 #[instrument(skip_all)]

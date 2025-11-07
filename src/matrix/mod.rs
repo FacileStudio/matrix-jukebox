@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use encryption::first_time_signature_identity_bootstrap;
-use handlers::{on_room_message, on_room_upgrade, on_rtc_member_join, on_stripped_state_member};
+use handlers::{on_room_message, on_room_upgrade, on_stripped_state_member};
 use helpers::{build_client, persist_sync_token};
 use matrix_sdk::{
     Client, Error, LoopCtrl,
@@ -14,6 +14,7 @@ use tracing::{debug, info, instrument};
 
 use crate::{
     CLIENT_STORAGE_DB_PATH,
+    matrix::rtc_session_manager::MatrixRtcSessionManager,
     settings::{ApplicationConfig, Database, Session},
 };
 
@@ -21,6 +22,11 @@ mod custom_events;
 mod encryption;
 mod handlers;
 mod helpers;
+
+mod livekit_session;
+mod rtc_session;
+mod rtc_session_manager;
+
 #[instrument(skip_all)]
 pub async fn sync(
     client: Client,
@@ -34,12 +40,14 @@ pub async fn sync(
     if let Some(sync_token) = initial_sync_token {
         sync_settings = sync_settings.token(sync_token);
     }
+
+    let _rtc_session_manager = MatrixRtcSessionManager::init(&client).await?;
+
     client.add_event_handler(on_stripped_state_member);
     let response = client.sync_once(sync_settings.clone()).await?;
     sync_settings = sync_settings.token(response.next_batch.clone());
     persist_sync_token(session_file, response.next_batch).await?;
     client.add_event_handler(on_room_message);
-    client.add_event_handler(on_rtc_member_join);
     client.add_event_handler(on_room_upgrade);
     client
         .sync_with_result_callback(sync_settings, |sync_result| {

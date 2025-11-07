@@ -156,14 +156,17 @@ pub struct MatrixToLivekitMembership {
 }
 
 impl MatrixToLivekitMembership {
+    #[expect(dead_code)]
     pub fn new(user_id: OwnedUserId, device_id: OwnedDeviceId) -> Self {
         Self { user_id, device_id }
     }
 
+    #[expect(dead_code)]
     pub fn user_id(&self) -> &str {
         self.user_id.as_ref()
     }
 
+    #[expect(dead_code)]
     pub fn device_id(&self) -> &str {
         self.device_id.as_ref()
     }
