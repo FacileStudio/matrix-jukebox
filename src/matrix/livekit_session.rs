@@ -7,7 +7,9 @@ use livekit::{
         prelude::{AudioFrame, AudioSourceOptions, RtcAudioSource},
     },
 };
-use rodio::{ChannelCount, SampleRate, cpal::Sample, mixer::mixer, source::noise};
+use rodio::{
+    ChannelCount, SampleRate, conversions::SampleTypeConverter, mixer::mixer, source::noise,
+};
 
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 use tracing::{info, instrument};
@@ -40,7 +42,8 @@ impl LiveKitSession {
         const SAMPLE_RATE: SampleRate = 48000;
         const CHANNEL_COUNT: ChannelCount = 2;
 
-        let (mixer, mut mixer_source) = mixer(CHANNEL_COUNT, SAMPLE_RATE);
+        let (mixer, mixer_source) = mixer(CHANNEL_COUNT, SAMPLE_RATE);
+        let mut mixer_source_converted = SampleTypeConverter::new(mixer_source);
 
         // TODO give the mixer to some playback handler instead of noise
         mixer.add(noise::Pink::new(SAMPLE_RATE));
@@ -82,11 +85,10 @@ impl LiveKitSession {
                 Err(err) => return Err(err.into()),
             }
             // TODO Maybe handle empty mixer_source better? Should we mute on the livekit side?
-
             audio_frame
                 .data
                 .to_mut()
-                .fill_with(|| mixer_source.next().unwrap_or(0.).to_sample());
+                .fill_with(|| mixer_source_converted.next().unwrap_or(0));
 
             source.capture_frame(&audio_frame).await.unwrap();
         }
