@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{path::Path, time::Duration};
+use std::{fmt::Display, path::Path, time::Duration};
 use tracing::{debug, error, instrument};
 
 use matrix_sdk::{
@@ -171,12 +171,8 @@ impl MatrixToLivekitMembership {
         self.device_id.as_ref()
     }
 }
-impl ToString for MatrixToLivekitMembership {
-    fn to_string(&self) -> String {
-        format!(
-            "{}:{}",
-            self.user_id.to_string(),
-            self.device_id.to_string()
-        )
+impl Display for MatrixToLivekitMembership {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{}:{}", self.user_id, self.device_id))
     }
 }

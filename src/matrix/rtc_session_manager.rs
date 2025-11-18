@@ -55,13 +55,13 @@ impl MatrixRtcSessionManager {
     }
     async fn on_rtc_member_changed(
         &self,
-        member: OriginalSyncCallMemberEvent,
+        event: OriginalSyncCallMemberEvent,
         room: Room,
     ) -> eyre::Result<()> {
         self.inner
             .lock()
             .await
-            .on_rtc_member_changed(member, room)
+            .on_rtc_member_changed(event, room)
             .await
     }
     async fn on_rtc_encryption_key_changed(
@@ -82,16 +82,16 @@ struct MatrixRtcSessionManagerInner {
 }
 
 impl MatrixRtcSessionManagerInner {
-    #[instrument(skip(self))]
+    #[instrument(skip(self, event, room), fields(room = %room.room_id(), sender = %event.sender))]
     async fn on_rtc_member_changed(
         &mut self,
-        member: OriginalSyncCallMemberEvent,
+        event: OriginalSyncCallMemberEvent,
         room: Room,
     ) -> eyre::Result<()> {
-        trace!(?member, "received event!");
+        trace!(?event, "received event!");
         let room_id = room.room_id();
         if let Some(session) = self.sessions.get_mut(room_id) {
-            session.on_rtc_member_event(member)?;
+            session.on_rtc_member_event(event)?;
 
             if !session.has_other_members() {
                 self.sessions
@@ -101,12 +101,16 @@ impl MatrixRtcSessionManagerInner {
                     .await?;
             }
         } else {
-            let room_id = room.room_id().to_owned();
-            let Some(session) = MatrixRtcSession::join_session(room).await? else {
-                return Ok(());
-            };
+            // Don't create calls for our own events (Should we also check device ID here?)
+            if event.sender != room.own_user_id() {
+                // Create a call for this session
+                let room_id = room.room_id().to_owned();
+                let Some(session) = MatrixRtcSession::join_session(room).await? else {
+                    return Ok(());
+                };
 
-            self.sessions.insert(room_id, session);
+                self.sessions.insert(room_id, session);
+            }
         }
 
         Ok(())

@@ -1,24 +1,21 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use eyre::eyre;
 use matrix_sdk::{
     Client, Room,
     deserialized_responses::SyncOrStrippedState,
     reqwest::Url,
-    ruma::{
-        OwnedUserId, UserId,
-        events::{
-            SyncStateEvent,
-            call::member::{
-                ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
-                CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
-                MembershipData, OriginalSyncCallMemberEvent, SessionMembershipData,
-            },
+    ruma::events::{
+        SyncStateEvent,
+        call::member::{
+            ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
+            CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
+            MembershipData, OriginalSyncCallMemberEvent, SessionMembershipData,
         },
     },
 };
 use tokio::sync::mpsc::{Sender, channel};
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::matrix::{
     custom_events::EncryptionKeysChangedEvent,
@@ -28,20 +25,26 @@ use crate::matrix::{
 
 pub struct MatrixRtcSession {
     room: Room,
-    members: HashMap<OwnedUserId, SessionMembershipData>,
+    members: BTreeMap<CallMemberStateKey, SessionMembershipData>,
     sender: Sender<LiveKitTaskMessages>,
 }
 
 fn to_membership(
-    membership_data: MembershipData,
-    sender: &UserId,
-) -> eyre::Result<(OwnedUserId, SessionMembershipData)> {
-    match membership_data {
-        MembershipData::Legacy(_) => Err(eyre!("we don't support legacy matrix rtc sessions")),
-        MembershipData::Session(session_membership_data) => {
-            Ok((sender.to_owned(), session_membership_data.clone()))
+    membership_event: &OriginalSyncCallMemberEvent,
+) -> Option<(CallMemberStateKey, SessionMembershipData)> {
+    let memberships = membership_event
+        .content
+        .active_memberships(Some(membership_event.origin_server_ts));
+    let membership = memberships.first()?;
+    match membership {
+        MembershipData::Session(session_membership_data) => Some((
+            membership_event.state_key.clone(),
+            (*session_membership_data).clone(),
+        )),
+        _ => {
+            warn!(membership = ?membership, "Received unsupported membership type");
+            None
         }
-        _ => Err(eyre!("unsupported matrix rtc session type")),
     }
 }
 
@@ -49,7 +52,7 @@ impl MatrixRtcSession {
     pub fn has_other_members(&self) -> bool {
         self.members
             .iter()
-            .any(|(member, _)| member != self.room.own_user_id())
+            .any(|(member_state_key, _)| member_state_key.user_id() != self.room.own_user_id())
     }
 
     pub(crate) async fn join_session(room: Room) -> eyre::Result<Option<Self>> {
@@ -58,21 +61,10 @@ impl MatrixRtcSession {
             .await?
             .into_iter()
             .filter_map(|ev| match ev.deserialize().ok()? {
-                SyncOrStrippedState::Sync(SyncStateEvent::Original(ev)) => ev
-                    .content
-                    .memberships()
-                    .get(0)
-                    .map(|md| to_membership(md.clone(), &ev.sender).ok())
-                    .flatten(),
+                SyncOrStrippedState::Sync(SyncStateEvent::Original(ev)) => to_membership(&ev),
                 _ => None,
             })
             .collect();
-
-        let user_id = room
-            .client()
-            .user_id()
-            .expect("client should be logged in")
-            .to_owned();
 
         let (sender, receiver) = channel(5);
 
@@ -81,12 +73,14 @@ impl MatrixRtcSession {
             members: memberships,
             sender,
         };
+
+        // TODO leave this behavior up to the application
         // Don't join empty calls
-        if session.members.len() == 0 {
+        if session.members.is_empty() {
             return Ok(None);
         }
         // Leave calls where we are the only member
-        if session.members.len() == 1 && session.members.contains_key(&user_id) {
+        if !session.has_other_members() {
             session.leave_session().await?;
             return Ok(None);
         }
@@ -114,8 +108,8 @@ impl MatrixRtcSession {
         let mut foci_list = if let Some((_, member)) = session
             .members
             .iter()
-            .filter(|(_, mem)| mem.foci_preferred.len() != 0)
-            .last()
+            .filter(|(_, mem)| !mem.foci_preferred.is_empty())
+            .next_back()
         {
             member.foci_preferred.clone()
         } else {
@@ -189,28 +183,17 @@ impl MatrixRtcSession {
 
     pub(crate) fn on_rtc_member_event(
         &mut self,
-        member: OriginalSyncCallMemberEvent,
+        event: OriginalSyncCallMemberEvent,
     ) -> eyre::Result<()> {
-        let user_id = &member.sender;
-        if let Some(membership) = member
-            .content
-            .active_memberships(Some(member.origin_server_ts))
-            .into_iter()
-            .filter_map(|membership| {
-                if let MembershipData::Session(membership) = membership {
-                    Some(membership)
-                } else {
-                    None
-                }
-            })
-            .next()
-        {
-            info!(%user_id, room_id=%self.room.room_id(), "joined the call");
-            self.members.insert(user_id.to_owned(), membership.clone());
-        } else {
-            info!(%user_id, room_id=%self.room.room_id(), "left the call");
-            self.members.remove(user_id);
+        let user_id = event.state_key.user_id().to_owned();
+        if let Some((state_key, membership)) = to_membership(&event) {
+            if self.members.insert(state_key, membership).is_none() {
+                info!(%user_id, room_id=%self.room.room_id(), "user joined the call");
+            }
+        } else if self.members.remove(&event.state_key).is_some() {
+            info!(%user_id, room_id=%self.room.room_id(), "user left the call");
         }
+
         Ok(())
     }
 
