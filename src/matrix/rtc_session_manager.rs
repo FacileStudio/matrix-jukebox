@@ -5,7 +5,7 @@ use matrix_sdk::{
     ruma::{OwnedRoomId, events::call::member::OriginalSyncCallMemberEvent},
 };
 use tokio::sync::Mutex;
-use tracing::{info, instrument, trace, warn};
+use tracing::{instrument, trace, warn};
 
 use crate::matrix::{custom_events::EncryptionKeysChangedEvent, rtc_session::MatrixRtcSession};
 
@@ -35,7 +35,6 @@ impl MatrixRtcSessionManager {
         };
         {
             let manager = manager.clone();
-
             client.add_event_handler(
                 |event: OriginalSyncCallMemberEvent, room: Room| async move {
                     manager.on_rtc_member_changed(event, room).await
@@ -44,11 +43,9 @@ impl MatrixRtcSessionManager {
         }
         {
             let manager = manager.clone();
-            client.add_event_handler(
-                |event: EncryptionKeysChangedEvent, client: Client| async move {
-                    manager.on_rtc_encryption_key_changed(event, client).await
-                },
-            );
+            client.add_event_handler(|event: EncryptionKeysChangedEvent| async move {
+                manager.on_rtc_encryption_key_changed(event).await
+            });
         }
 
         Ok(manager)
@@ -67,12 +64,11 @@ impl MatrixRtcSessionManager {
     async fn on_rtc_encryption_key_changed(
         &self,
         event: EncryptionKeysChangedEvent,
-        client: Client,
-    ) {
+    ) -> eyre::Result<()> {
         self.inner
             .lock()
             .await
-            .on_rtc_encryption_key_changed(event, client)
+            .on_rtc_encryption_key_changed(event)
             .await
     }
 }
@@ -91,7 +87,7 @@ impl MatrixRtcSessionManagerInner {
         trace!(?event, "received event!");
         let room_id = room.room_id();
         if let Some(session) = self.sessions.get_mut(room_id) {
-            session.on_rtc_member_event(event)?;
+            session.on_rtc_member_event(event).await?;
 
             if !session.has_other_members() {
                 self.sessions
@@ -120,14 +116,14 @@ impl MatrixRtcSessionManagerInner {
     async fn on_rtc_encryption_key_changed(
         &mut self,
         event: EncryptionKeysChangedEvent,
-        client: Client,
-    ) {
-        info!(?event, "received event!");
+    ) -> eyre::Result<()> {
+        trace!(?event, "received event!");
         let room_id = &event.content.room_id;
         if let Some(session) = self.sessions.get_mut(room_id) {
-            session.on_rtc_encryption_key_changed(event, client).await;
+            session.on_rtc_encryption_key_changed(event).await?;
         } else {
             warn!(?event, "received key change for unknown call!");
         }
+        Ok(())
     }
 }

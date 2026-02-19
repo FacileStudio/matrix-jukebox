@@ -4,22 +4,30 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-color-eyre = "0.6.4"
+color-eyre = "0.6.5"
 eyre = "0.6.12"
-livekit = { version = "0.7.24", features = ["native-tls"] }
-
-matrix-sdk = { version = "0.14.0", features = [
+#livekit = { version = "0.7.32", features = ["native-tls"] }
+#livekit = { path = "../matrix/livekit-rust-sdks/livekit", features = [
+#    "native-tls",
+#] }
+livekit = { git = "https://github.com/onestacked/livekit-rust-sdks.git", branch = "EC-compat-changes", features = [
+    "native-tls",
+] }
+matrix-sdk = { version = "0.16.0", features = [
     "bundled-sqlite",
     "e2e-encryption",
     "eyre",
     "rustls-tls",
+    "experimental-send-custom-to-device",
 ], default-features = false }
-rand = "0.9.2"
+
+matrix-sdk-crypto = { version = "0.16.0", default-features = false }
+rand = "0.10.0"
 rodio = { version = "0.21.1", features = ["noise"], default-features = false }
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
-tokio = "1.45.0"
-tracing = "0.1.41"
+tokio = "1.49.0"
+tracing = "0.1.44"
 tracing-error = "0.2.1"
 tracing-log = "0.2.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

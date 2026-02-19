@@ -1,3 +1,4 @@
+use livekit::id::ParticipantIdentity;
 use serde::{Deserialize, Serialize};
 use std::{fmt::Display, path::Path, time::Duration};
 use tracing::{debug, error, instrument};
@@ -6,7 +7,7 @@ use matrix_sdk::{
     Client, ClientBuilder, OwnedServerName, Room,
     reqwest::Url,
     ruma::{
-        OwnedDeviceId, OwnedUserId, api::client::account::request_openid_token,
+        self, OwnedDeviceId, OwnedUserId, api::client::account::request_openid_token,
         authentication::TokenType, exports::serde_json,
     },
 };
@@ -70,10 +71,12 @@ pub struct LivekitJwtRequest {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct OpenIDTokenResponse {
     access_token: String,
+    #[serde(with = "ruma::serde::duration::secs")]
     expires_in: Duration,
     token_type: TokenType,
     matrix_server_name: OwnedServerName,
 }
+
 #[derive(Deserialize, Debug)]
 pub struct LivekitTokenResponse {
     #[serde(rename = "jwt")]
@@ -156,17 +159,14 @@ pub struct MatrixToLivekitMembership {
 }
 
 impl MatrixToLivekitMembership {
-    #[expect(dead_code)]
     pub fn new(user_id: OwnedUserId, device_id: OwnedDeviceId) -> Self {
         Self { user_id, device_id }
     }
 
-    #[expect(dead_code)]
     pub fn user_id(&self) -> &str {
         self.user_id.as_ref()
     }
 
-    #[expect(dead_code)]
     pub fn device_id(&self) -> &str {
         self.device_id.as_ref()
     }
@@ -174,5 +174,11 @@ impl MatrixToLivekitMembership {
 impl Display for MatrixToLivekitMembership {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:{}", self.user_id, self.device_id))
+    }
+}
+
+impl From<MatrixToLivekitMembership> for ParticipantIdentity {
+    fn from(value: MatrixToLivekitMembership) -> Self {
+        ParticipantIdentity(value.to_string())
     }
 }

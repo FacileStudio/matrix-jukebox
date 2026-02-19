@@ -1,25 +1,36 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
-use eyre::eyre;
+use eyre::{Context, eyre};
 use matrix_sdk::{
-    Client, Room,
+    Room,
     deserialized_responses::SyncOrStrippedState,
     reqwest::Url,
-    ruma::events::{
-        SyncStateEvent,
-        call::member::{
-            ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
-            CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
-            MembershipData, OriginalSyncCallMemberEvent, SessionMembershipData,
+    ruma::{
+        events::{
+            SyncStateEvent, ToDeviceEventContent,
+            call::member::{
+                ActiveFocus, ActiveLivekitFocus, Application, CallApplicationContent,
+                CallMemberEventContent, CallMemberStateKey, CallScope, Focus, LivekitFocus,
+                MembershipData, OriginalSyncCallMemberEvent, SessionMembershipData,
+            },
         },
+        serde::{Base64, Raw},
     },
 };
-use tokio::sync::mpsc::{Sender, channel};
+use matrix_sdk_crypto::CollectStrategy;
+use rand::{TryRng, rngs::SysRng};
+use tokio::{
+    sync::mpsc::{Sender, channel},
+    time::sleep,
+};
 use tracing::{info, warn};
 
 use crate::matrix::{
-    custom_events::EncryptionKeysChangedEvent,
-    helpers::{PreferedFocus, get_livekit_token, get_openid_token, get_prefered_foci},
+    custom_events::{EncryptionKeysChangedEvent, EncryptionKeysChangedEventContent, Key, Member},
+    helpers::{
+        MatrixToLivekitMembership, PreferedFocus, get_livekit_token, get_openid_token,
+        get_prefered_foci,
+    },
     livekit_session::{LiveKitSession, LiveKitTaskMessages},
 };
 
@@ -27,6 +38,7 @@ pub struct MatrixRtcSession {
     room: Room,
     members: BTreeMap<CallMemberStateKey, SessionMembershipData>,
     sender: Sender<LiveKitTaskMessages>,
+    last_key_index: u8,
 }
 
 fn to_membership(
@@ -66,12 +78,18 @@ impl MatrixRtcSession {
             })
             .collect();
 
-        let (sender, receiver) = channel(5);
+        let client = room.client();
 
-        let session = MatrixRtcSession {
+        let device_id = client
+            .device_id()
+            .expect("a logged in client should have a device id");
+        let (sender, receiver) = channel(20);
+
+        let mut session = MatrixRtcSession {
             room,
             members: memberships,
             sender,
+            last_key_index: 0_u8.wrapping_sub(1),
         };
 
         // TODO leave this behavior up to the application
@@ -85,7 +103,6 @@ impl MatrixRtcSession {
             return Ok(None);
         }
 
-        let client = session.room.client();
         let our_prefered_foci = get_prefered_foci(&client).await?;
         let PreferedFocus::Livekit(livekit_info) = our_prefered_foci.list.first().unwrap() else {
             return Err(eyre!(
@@ -97,14 +114,7 @@ impl MatrixRtcSession {
             session.room.room_id().to_string(),
             our_livekit_service_url.to_string(),
         ));
-        let device_id = client
-            .device_id()
-            .expect("a logged in client should have a device id");
-        let user_id = client
-            .user_id()
-            .expect("a logged in client should have a user id");
-        let application =
-            Application::Call(CallApplicationContent::new("".to_string(), CallScope::Room));
+
         let mut foci_list = if let Some((_, member)) = session
             .members
             .iter()
@@ -134,24 +144,27 @@ impl MatrixRtcSession {
         .await?;
 
         let join_event = CallMemberEventContent::new(
-            application,
+            Application::Call(CallApplicationContent::new("".to_string(), CallScope::Room)),
             device_id.into(),
             ActiveFocus::Livekit(ActiveLivekitFocus::new()),
             foci_list,
             None,
             None,
         );
-
-        let mut livekit_session = LiveKitSession::new(receiver, livekit_token).await?;
-
-        tokio::spawn(async move { livekit_session.run().await });
-
-        let state_key = CallMemberStateKey::new(user_id.into(), Some(device_id.into()), true);
         session
             .room
-            .send_state_event_for_key(&state_key, join_event)
+            .send_state_event_for_key(&session.our_state_key(), join_event)
             .await?;
+        let encryption_key = if session.room.encryption_state().is_encrypted() {
+            Some(session.generate_new_key(false).await?)
+        } else {
+            None
+        };
 
+        let mut livekit_session =
+            LiveKitSession::new(receiver, livekit_token, encryption_key.is_some()).await?;
+
+        tokio::spawn(async move { livekit_session.run().await });
         Ok(Some(session))
     }
 
@@ -160,38 +173,147 @@ impl MatrixRtcSession {
             .sender
             .send(LiveKitTaskMessages::LeaveLiveKitRoom)
             .await;
+        let leave_event = CallMemberEventContent::new_empty(None);
+
+        self.room
+            .send_state_event_for_key(&self.our_state_key(), leave_event)
+            .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn on_rtc_member_event(
+        &mut self,
+        event: OriginalSyncCallMemberEvent,
+    ) -> eyre::Result<()> {
+        let user_id = event.state_key.user_id().to_owned();
+        let device_id = if let Some((state_key, membership)) = to_membership(&event) {
+            if self.members.insert(state_key, membership.clone()).is_none() {
+                info!(%user_id, room_id=%self.room.room_id(), "user joined the call");
+                Some(membership.device_id.clone())
+            } else {
+                // User just changed membership, no key rotation needed
+                return Ok(());
+            }
+        } else if self.members.remove(&event.state_key).is_some() {
+            info!(%user_id, room_id=%self.room.room_id(), "user left the call");
+            None
+        } else {
+            // Empty membership was resent, no need to rotate keys
+            return Ok(());
+        };
+
+        let our_device_id = self
+            .room
+            .client()
+            .device_id()
+            .expect("client should be logged in")
+            .to_owned();
+
+        // Regenerate keys only in encrypted rooms, where the sender was not us
+        if self.room.encryption_state().is_encrypted()
+            && event.sender != self.room.own_user_id()
+            && device_id != Some(our_device_id)
+        {
+            // TODO rate limit this (as sending keys can be expensive)
+            self.generate_new_key(true).await?;
+        }
+        Ok(())
+    }
+
+    async fn generate_new_key(&mut self, delay_using: bool) -> eyre::Result<()> {
+        // Increment key index
+        let key_index = self.last_key_index.wrapping_add(1);
+        self.last_key_index = key_index;
+
+        let mut key = vec![0u8; 16];
+        SysRng
+            .try_fill_bytes(&mut key)
+            .context("Failed to generate MatrixRTC key")?;
+
+        let key_base64 = Base64::new(key.clone());
         let user_id = self
             .room
             .client()
             .user_id()
             .expect("client should be logged in")
             .to_owned();
+
         let device_id = self
             .room
             .client()
             .device_id()
             .expect("client should be logged in")
             .to_owned();
-        let state_key = CallMemberStateKey::new(user_id, Some(device_id.into()), true);
-        let leave_event = CallMemberEventContent::new_empty(None);
+
+        let key = Key {
+            index: key_index.into(),
+            content: key_base64,
+        };
+
+        let key_changed_event = EncryptionKeysChangedEventContent {
+            member: Member {
+                claimed_device_id: device_id.clone(),
+            },
+            key: (&key).clone(),
+            application: Application::Call(CallApplicationContent::new(
+                "".to_string(),
+                CallScope::Room,
+            )),
+            room_id: self.room.room_id().into(),
+        };
+
+        let mut devices = vec![];
+        for (state_key, data) in &self.members {
+            if state_key == &self.our_state_key() {
+                // Skip own device
+                continue;
+            }
+            if let Some(device) = self
+                .room
+                .client()
+                .encryption()
+                .get_device(state_key.user_id(), &data.device_id)
+                .await?
+            {
+                devices.push(device);
+            }
+        }
 
         self.room
-            .send_state_event_for_key(&state_key, leave_event)
+            .client()
+            .encryption()
+            .encrypt_and_send_raw_to_device(
+                devices.iter().collect(),
+                &key_changed_event.event_type().to_string(),
+                Raw::new(&key_changed_event)?.cast(),
+                CollectStrategy::IdentityBasedStrategy,
+            )
             .await?;
-        Ok(())
-    }
 
-    pub(crate) fn on_rtc_member_event(
-        &mut self,
-        event: OriginalSyncCallMemberEvent,
-    ) -> eyre::Result<()> {
-        let user_id = event.state_key.user_id().to_owned();
-        if let Some((state_key, membership)) = to_membership(&event) {
-            if self.members.insert(state_key, membership).is_none() {
-                info!(%user_id, room_id=%self.room.room_id(), "user joined the call");
-            }
-        } else if self.members.remove(&event.state_key).is_some() {
-            info!(%user_id, room_id=%self.room.room_id(), "user left the call");
+        if delay_using {
+            tokio::spawn({
+                let sender = self.sender.clone();
+                async move {
+                    // According to MSC4143 the default delay before using a new key is 5 seconds
+                    sleep(Duration::from_secs(5)).await;
+
+                    let _ = sender
+                        .send(LiveKitTaskMessages::KeyChanged(
+                            MatrixToLivekitMembership::new(user_id, device_id).into(),
+                            key.clone(),
+                        ))
+                        .await
+                        .inspect_err(|err| warn!(error = %err, "Sending keys to LiveKit failed"));
+                }
+            });
+        } else {
+            self.sender
+                .send(LiveKitTaskMessages::KeyChanged(
+                    MatrixToLivekitMembership::new(user_id, device_id).into(),
+                    key.clone(),
+                ))
+                .await
+                .context("Failed to send key to LiveKit task")?;
         }
 
         Ok(())
@@ -199,9 +321,40 @@ impl MatrixRtcSession {
 
     pub(crate) async fn on_rtc_encryption_key_changed(
         &mut self,
-        _event: EncryptionKeysChangedEvent,
-        _client: Client,
-    ) {
-        // TODO implement encryption
+        event: EncryptionKeysChangedEvent,
+    ) -> eyre::Result<()> {
+        let room_id = event.content.room_id;
+        let user_id = event.sender;
+        let device_id = event.content.member.claimed_device_id;
+        let livekit_identity = MatrixToLivekitMembership::new(user_id, device_id);
+        info!(
+            "in room {}, livekit member {} has key {}",
+            room_id,
+            livekit_identity.to_string(),
+            event.content.key.content
+        );
+        if self.room.encryption_state().is_encrypted() {
+            // TODO ignore keys that were shared through an unencrypted ToDevice event (if possible)
+
+            self.sender
+                .send(LiveKitTaskMessages::KeyChanged(
+                    livekit_identity.into(),
+                    event.content.key,
+                ))
+                .await?;
+        } else {
+            warn!("Received key for call in unencrypted room")
+        }
+        Ok(())
+    }
+    fn our_state_key(&self) -> CallMemberStateKey {
+        let client = self.room.client();
+        let user_id = client
+            .user_id()
+            .expect("client should be logged in")
+            .to_owned();
+
+        let device_id = client.device_id().expect("client should be logged in");
+        CallMemberStateKey::new(user_id, Some(device_id.to_string()), true)
     }
 }

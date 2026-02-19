@@ -8,7 +8,7 @@ use matrix_sdk::{
     config::SyncSettings,
     ruma::{api::client::filter::FilterDefinition, exports::serde_json},
 };
-use rand::{Rng, distr::Alphanumeric, rng};
+use rand::{RngExt, distr::Alphanumeric, rng};
 use tokio::fs;
 use tracing::{debug, info, instrument};
 

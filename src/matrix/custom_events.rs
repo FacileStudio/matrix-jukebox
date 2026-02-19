@@ -1,5 +1,7 @@
 use matrix_sdk::ruma::OwnedRoomId;
+use matrix_sdk::ruma::events::AnyToDeviceEventContent;
 use matrix_sdk::ruma::events::macros::EventContent;
+use matrix_sdk::ruma::serde::{Base64, JsonCastable};
 use matrix_sdk::ruma::{OwnedDeviceId, events::call::member::Application};
 use serde::{Deserialize, Serialize};
 
@@ -16,12 +18,12 @@ pub struct EncryptionKeysChangedEventContent {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Key {
-    index: usize,
-    //I'm not sure if this comes as utf-8 over the wire, but it doesn't come as an array of bytes apparently, looking at events from the show source view of element, after toggling the show unknown events checkbox. Thoughts?
+    pub index: usize,
     #[serde(rename = "key")]
-    pub content: String,
+    pub content: Base64,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Member {
     pub claimed_device_id: OwnedDeviceId,
 }
+impl JsonCastable<AnyToDeviceEventContent> for EncryptionKeysChangedEventContent {}
