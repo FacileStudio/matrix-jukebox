@@ -1,0 +1,25 @@
+[package]
+name = "matrix-rtc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eyre = "0.6.12"
+livekit = { git = "https://github.com/onestacked/livekit-rust-sdks.git", branch = "EC-compat-changes", features = [
+    "native-tls",
+] }
+
+matrix-sdk = { version = "0.16.0", features = [
+    "bundled-sqlite",
+    "e2e-encryption",
+    "eyre",
+    "rustls-tls",
+    "experimental-send-custom-to-device",
+], default-features = false }
+matrix-sdk-crypto = { version = "0.16.0", default-features = false }
+rand = "0.10.0"
+rodio = { version = "0.22.1", features = ["noise"], default-features = false }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_yaml = "0.9.34"
+tokio = "1.49.0"
+tracing = "0.1.44"

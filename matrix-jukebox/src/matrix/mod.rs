@@ -11,21 +11,17 @@ use matrix_sdk::{
 use rand::{RngExt, distr::Alphanumeric, rng};
 use tokio::fs;
 use tracing::{debug, info, instrument};
+use matrix_rtc::rtc_session_manager::MatrixRtcSessionManager;
 
 use crate::{
     CLIENT_STORAGE_DB_PATH,
-    matrix::rtc_session_manager::MatrixRtcSessionManager,
     settings::{ApplicationConfig, Database, Session},
 };
 
-mod custom_events;
+
 mod encryption;
 mod handlers;
 mod helpers;
-
-mod livekit_session;
-mod rtc_session;
-mod rtc_session_manager;
 
 #[instrument(skip_all)]
 pub async fn sync(

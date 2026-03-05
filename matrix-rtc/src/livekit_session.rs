@@ -9,14 +9,12 @@ use livekit::{
         prelude::{AudioFrame, AudioSourceOptions, RtcAudioSource},
     },
 };
-use rodio::{
-    ChannelCount, SampleRate, conversions::SampleTypeConverter, mixer::mixer, source::noise,
-};
+use rodio::{conversions::SampleTypeConverter, mixer::mixer, source::noise};
 
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 use tracing::{info, instrument};
 
-use crate::matrix::custom_events::Key;
+use crate::custom_events::Key;
 
 use super::helpers::LivekitTokenResponse;
 
@@ -63,14 +61,19 @@ impl LiveKitSession {
     }
     #[instrument(skip(self))]
     pub async fn run(&mut self) -> eyre::Result<()> {
-        const SAMPLE_RATE: SampleRate = 48000;
-        const CHANNEL_COUNT: ChannelCount = 2;
+        const SAMPLE_RATE: u32 = 48000;
+        const CHANNEL_COUNT: u16 = 2;
 
-        let (mixer, mixer_source) = mixer(CHANNEL_COUNT, SAMPLE_RATE);
+        let (mixer, mixer_source) = mixer(
+            CHANNEL_COUNT.try_into().expect("Constant is not zero"),
+            SAMPLE_RATE.try_into().expect("Constant is not zero"),
+        );
         let mut mixer_source_converted = SampleTypeConverter::new(mixer_source);
 
         // TODO give the mixer to some playback handler instead of noise
-        mixer.add(noise::Pink::new(SAMPLE_RATE));
+        mixer.add(noise::Pink::new(
+            SAMPLE_RATE.try_into().expect("Constant is not zero"),
+        ));
 
         let source = NativeAudioSource::new(
             AudioSourceOptions::default(),
@@ -94,9 +97,9 @@ impl LiveKitSession {
             )
             .await?;
 
-        const CHUNK_SIZE: u32 = SAMPLE_RATE; // Buffer 1s
+        let chunk_size: u32 = SAMPLE_RATE.into(); // Buffer 1s
 
-        let mut audio_frame = AudioFrame::new(SAMPLE_RATE, CHANNEL_COUNT.into(), CHUNK_SIZE);
+        let mut audio_frame = AudioFrame::new(SAMPLE_RATE, CHANNEL_COUNT.into(), chunk_size);
 
         let mut sub = self.room.subscribe();
         loop {

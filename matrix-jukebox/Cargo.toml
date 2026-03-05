@@ -1,0 +1,26 @@
+[package]
+name = "matrix-jukebox"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+color-eyre = "0.6.4"
+eyre = "0.6.12"
+
+matrix-sdk = { version = "0.16.0", features = [
+    "bundled-sqlite",
+    "e2e-encryption",
+    "eyre",
+    "rustls-tls",
+], default-features = false }
+
+matrix-rtc = { path = "../matrix-rtc" }
+rand = "0.10.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_yaml = "0.9.34"
+tokio = "1.45.0"
+tracing = "0.1.41"
+tracing-error = "0.2.1"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing-tree = "0.4.0"

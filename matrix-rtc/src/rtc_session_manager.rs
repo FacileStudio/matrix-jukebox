@@ -7,7 +7,7 @@ use matrix_sdk::{
 use tokio::sync::Mutex;
 use tracing::{instrument, trace, warn};
 
-use crate::matrix::{custom_events::EncryptionKeysChangedEvent, rtc_session::MatrixRtcSession};
+use crate::{custom_events::EncryptionKeysChangedEvent, rtc_session::MatrixRtcSession};
 
 #[derive(Clone)]
 pub struct MatrixRtcSessionManager {

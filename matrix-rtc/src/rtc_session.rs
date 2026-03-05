@@ -25,7 +25,7 @@ use tokio::{
 };
 use tracing::{info, warn};
 
-use crate::matrix::{
+use crate::{
     custom_events::{EncryptionKeysChangedEvent, EncryptionKeysChangedEventContent, Key, Member},
     helpers::{
         MatrixToLivekitMembership, PreferedFocus, get_livekit_token, get_openid_token,
