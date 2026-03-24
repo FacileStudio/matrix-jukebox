@@ -5,9 +5,7 @@ edition = "2024"
 
 [dependencies]
 eyre = "0.6.12"
-livekit = { git = "https://github.com/onestacked/livekit-rust-sdks.git", branch = "EC-compat-changes", features = [
-    "native-tls",
-] }
+livekit = { version = "0.7.34", features = ["native-tls"] }
 
 matrix-sdk = { version = "0.16.0", features = [
     "bundled-sqlite",

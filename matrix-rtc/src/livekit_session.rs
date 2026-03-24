@@ -1,6 +1,6 @@
 use livekit::{
     Room, RoomOptions,
-    e2ee::key_provider::{KeyDerivationFunction, KeyProvider, KeyProviderOptions},
+    e2ee::key_provider::{KeyDerivationAlgorithm, KeyProvider, KeyProviderOptions},
     id::ParticipantIdentity,
     options::TrackPublishOptions,
     track::{LocalAudioTrack, LocalTrack, TrackSource},
@@ -39,7 +39,7 @@ impl LiveKitSession {
         let mut key_provider_options = KeyProviderOptions::default();
         key_provider_options.ratchet_window_size = 10;
         key_provider_options.key_ring_size = 256;
-        key_provider_options.key_derivation_function = KeyDerivationFunction::HKDF;
+        key_provider_options.key_derivation_algorithm = KeyDerivationAlgorithm::HKDF;
 
         let key_provider = KeyProvider::new(key_provider_options);
         options.encryption = enable_encryption.then(|| livekit::E2eeOptions {
