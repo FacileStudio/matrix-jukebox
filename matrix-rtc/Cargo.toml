@@ -16,7 +16,7 @@ matrix-sdk = { version = "0.16.0", features = [
 ], default-features = false }
 matrix-sdk-crypto = { version = "0.16.0", default-features = false }
 rand = "0.10.0"
-rodio = { version = "0.22.1", features = ["noise"], default-features = false }
+rodio = { version = "0.22.1", features = ["noise", "mp4", "mp3"], default-features = false }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_yaml = "0.9.34"
 tokio = "1.49.0"

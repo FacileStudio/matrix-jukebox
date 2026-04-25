@@ -68,6 +68,14 @@ impl MatrixRtcSession {
     }
 
     pub(crate) async fn join_session(room: Room) -> eyre::Result<Option<Self>> {
+        Self::join_session_internal(room, false).await
+    }
+
+    pub(crate) async fn join_session_allow_empty(room: Room) -> eyre::Result<Option<Self>> {
+        Self::join_session_internal(room, true).await
+    }
+
+    async fn join_session_internal(room: Room, allow_empty: bool) -> eyre::Result<Option<Self>> {
         let memberships = room
             .get_state_events_static::<CallMemberEventContent>()
             .await?
@@ -92,13 +100,10 @@ impl MatrixRtcSession {
             last_key_index: 0_u8.wrapping_sub(1),
         };
 
-        // TODO leave this behavior up to the application
-        // Don't join empty calls
-        if session.members.is_empty() {
+        if session.members.is_empty() && !allow_empty {
             return Ok(None);
         }
-        // Leave calls where we are the only member
-        if !session.has_other_members() {
+        if !session.has_other_members() && !allow_empty {
             session.leave_session().await?;
             return Ok(None);
         }
@@ -127,7 +132,6 @@ impl MatrixRtcSession {
         };
         foci_list.insert(0, our_focus);
 
-        // This probably needs a different selection algorithm (for now just always take the first one).
         let Focus::Livekit(selected_focus) =
             foci_list.last().expect("At least out foci is in the list as we just added it (if it wasn't included previously)")
         else {
@@ -181,6 +185,13 @@ impl MatrixRtcSession {
         Ok(())
     }
 
+    pub(crate) async fn play_youtube_url(&self, url: String) -> eyre::Result<()> {
+        self.sender
+            .send(LiveKitTaskMessages::PlayYoutubeUrl(url))
+            .await
+            .map_err(|err| eyre!("failed to send play request to LiveKit session: {err}"))
+    }
+
     pub(crate) async fn on_rtc_member_event(
         &mut self,
         event: OriginalSyncCallMemberEvent,
@@ -191,14 +202,12 @@ impl MatrixRtcSession {
                 info!(%user_id, room_id=%self.room.room_id(), "user joined the call");
                 Some(membership.device_id.clone())
             } else {
-                // User just changed membership, no key rotation needed
                 return Ok(());
             }
         } else if self.members.remove(&event.state_key).is_some() {
             info!(%user_id, room_id=%self.room.room_id(), "user left the call");
             None
         } else {
-            // Empty membership was resent, no need to rotate keys
             return Ok(());
         };
 
@@ -209,19 +218,16 @@ impl MatrixRtcSession {
             .expect("client should be logged in")
             .to_owned();
 
-        // Regenerate keys only in encrypted rooms, where the sender was not us
         if self.room.encryption_state().is_encrypted()
             && event.sender != self.room.own_user_id()
             && device_id != Some(our_device_id)
         {
-            // TODO rate limit this (as sending keys can be expensive)
             self.generate_new_key(true).await?;
         }
         Ok(())
     }
 
     async fn generate_new_key(&mut self, delay_using: bool) -> eyre::Result<()> {
-        // Increment key index
         let key_index = self.last_key_index.wrapping_add(1);
         self.last_key_index = key_index;
 
@@ -265,7 +271,6 @@ impl MatrixRtcSession {
         let mut devices = vec![];
         for (state_key, data) in &self.members {
             if state_key == &self.our_state_key() {
-                // Skip own device
                 continue;
             }
             if let Some(device) = self
@@ -279,7 +284,8 @@ impl MatrixRtcSession {
             }
         }
 
-        self.room
+        if let Err(error) = self
+            .room
             .client()
             .encryption()
             .encrypt_and_send_raw_to_device(
@@ -288,13 +294,19 @@ impl MatrixRtcSession {
                 Raw::new(&key_changed_event)?.cast(),
                 CollectStrategy::IdentityBasedStrategy,
             )
-            .await?;
+            .await
+        {
+            warn!(
+                error = %error,
+                "failed to send MatrixRTC encryption key to devices; continuing without failing the session"
+            );
+            return Ok(());
+        }
 
         if delay_using {
             tokio::spawn({
                 let sender = self.sender.clone();
                 async move {
-                    // According to MSC4143 the default delay before using a new key is 5 seconds
                     sleep(Duration::from_secs(5)).await;
 
                     let _ = sender
@@ -334,8 +346,6 @@ impl MatrixRtcSession {
             event.content.key.content
         );
         if self.room.encryption_state().is_encrypted() {
-            // TODO ignore keys that were shared through an unencrypted ToDevice event (if possible)
-
             self.sender
                 .send(LiveKitTaskMessages::KeyChanged(
                     livekit_identity.into(),
@@ -347,6 +357,7 @@ impl MatrixRtcSession {
         }
         Ok(())
     }
+
     fn our_state_key(&self) -> CallMemberStateKey {
         let client = self.room.client();
         let user_id = client

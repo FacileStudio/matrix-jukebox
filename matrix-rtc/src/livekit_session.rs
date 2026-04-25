@@ -9,10 +9,13 @@ use livekit::{
         prelude::{AudioFrame, AudioSourceOptions, RtcAudioSource},
     },
 };
-use rodio::{conversions::SampleTypeConverter, mixer::mixer, source::noise};
+use rodio::{Decoder, Player, conversions::SampleTypeConverter, mixer::mixer};
 
+use std::{fs::File, io::BufReader, path::PathBuf, process::Command, sync::Arc};
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 use tracing::{info, instrument};
+use tracing::warn;
+use rand::RngExt;
 
 use crate::custom_events::Key;
 
@@ -21,6 +24,7 @@ use super::helpers::LivekitTokenResponse;
 pub enum LiveKitTaskMessages {
     LeaveLiveKitRoom,
     KeyChanged(ParticipantIdentity, Key),
+    PlayYoutubeUrl(String),
 }
 
 pub struct LiveKitSession {
@@ -69,11 +73,7 @@ impl LiveKitSession {
             SAMPLE_RATE.try_into().expect("Constant is not zero"),
         );
         let mut mixer_source_converted = SampleTypeConverter::new(mixer_source);
-
-        // TODO give the mixer to some playback handler instead of noise
-        mixer.add(noise::Pink::new(
-            SAMPLE_RATE.try_into().expect("Constant is not zero"),
-        ));
+        let player = Arc::new(Player::connect_new(&mixer));
 
         let source = NativeAudioSource::new(
             AudioSourceOptions::default(),
@@ -114,6 +114,14 @@ impl LiveKitSession {
                         key.index as i32,
                         key.content.into_inner(),
                     );
+                }
+                Ok(LiveKitTaskMessages::PlayYoutubeUrl(url)) => {
+                    let player = player.clone();
+                    tokio::spawn(async move {
+                        if let Err(error) = play_youtube_url(player, url).await {
+                            warn!(error = %error, "failed to queue YouTube audio");
+                        }
+                    });
                 }
                 Err(TryRecvError::Empty) => {}
                 Err(err) => return Err(err.into()),
@@ -156,4 +164,57 @@ impl LiveKitSession {
         self.room.close().await?;
         Ok(())
     }
+}
+
+async fn play_youtube_url(player: Arc<Player>, url: String) -> eyre::Result<()> {
+    let downloaded_path = tokio::task::spawn_blocking(move || download_with_ytdlp(&url))
+        .await
+        .map_err(|error| eyre::eyre!("yt-dlp task failed to join: {error}"))??;
+
+    let file = File::open(&downloaded_path)?;
+    let source = Decoder::try_from(BufReader::new(file))?;
+    let _ = std::fs::remove_file(&downloaded_path);
+
+    player.append(source);
+    Ok(())
+}
+
+fn download_with_ytdlp(url: &str) -> eyre::Result<PathBuf> {
+    let suffix: String = rand::rng()
+        .sample_iter(rand::distr::Alphanumeric)
+        .take(16)
+        .map(char::from)
+        .collect();
+    let base_path = std::env::temp_dir().join(format!("matrix-jukebox-{suffix}"));
+    let output_template = format!("{}.%(ext)s", base_path.display());
+
+    let output = Command::new("yt-dlp")
+        .args([
+            "--no-playlist",
+            "--quiet",
+            "--format",
+            "bestaudio[ext=m4a]/bestaudio[ext=mp3]",
+            "--output",
+            &output_template,
+            "--print",
+            "after_move:filepath",
+            url,
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        return Err(eyre::eyre!(
+            "yt-dlp failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let path = stdout
+        .lines()
+        .rev()
+        .find(|line| !line.trim().is_empty())
+        .ok_or_else(|| eyre::eyre!("yt-dlp did not report a downloaded file path"))?;
+
+    Ok(PathBuf::from(path.trim()))
 }

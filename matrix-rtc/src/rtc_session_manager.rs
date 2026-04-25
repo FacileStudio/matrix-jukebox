@@ -12,6 +12,7 @@ use crate::{custom_events::EncryptionKeysChangedEvent, rtc_session::MatrixRtcSes
 #[derive(Clone)]
 pub struct MatrixRtcSessionManager {
     inner: Arc<Mutex<MatrixRtcSessionManagerInner>>,
+    client: Client,
 }
 
 impl MatrixRtcSessionManager {
@@ -32,6 +33,7 @@ impl MatrixRtcSessionManager {
 
         let manager = Self {
             inner: Arc::new(Mutex::new(inner)),
+            client: client.clone(),
         };
         {
             let manager = manager.clone();
@@ -69,6 +71,14 @@ impl MatrixRtcSessionManager {
             .lock()
             .await
             .on_rtc_encryption_key_changed(event)
+            .await
+    }
+
+    pub async fn play_youtube_url(&self, room_id: OwnedRoomId, url: String) -> eyre::Result<()> {
+        self.inner
+            .lock()
+            .await
+            .play_youtube_url(&self.client, room_id, url)
             .await
     }
 }
@@ -125,5 +135,27 @@ impl MatrixRtcSessionManagerInner {
             warn!(?event, "received key change for unknown call!");
         }
         Ok(())
+    }
+
+    async fn play_youtube_url(
+        &mut self,
+        client: &Client,
+        room_id: OwnedRoomId,
+        url: String,
+    ) -> eyre::Result<()> {
+        if !self.sessions.contains_key(&room_id) {
+            let Some(room) = client.get_room(&room_id) else {
+                return Err(eyre::eyre!("room {room_id} is not known by this client"));
+            };
+            let Some(session) = MatrixRtcSession::join_session_allow_empty(room).await? else {
+                return Err(eyre::eyre!("unable to start MatrixRTC session in room {room_id}"));
+            };
+            self.sessions.insert(room_id.clone(), session);
+        }
+
+        let Some(session) = self.sessions.get(&room_id) else {
+            return Err(eyre::eyre!("no active MatrixRTC session in room {room_id}"));
+        };
+        session.play_youtube_url(url).await
     }
 }

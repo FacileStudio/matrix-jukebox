@@ -28,6 +28,7 @@ pub async fn sync(
     client: Client,
     initial_sync_token: Option<String>,
     session_file: &Path,
+    command_prefix: String,
 ) -> eyre::Result<()> {
     let filter = FilterDefinition::with_lazy_loading();
 
@@ -37,7 +38,9 @@ pub async fn sync(
         sync_settings = sync_settings.token(sync_token);
     }
 
-    let _rtc_session_manager = MatrixRtcSessionManager::init(&client).await?;
+    let rtc_session_manager = MatrixRtcSessionManager::init(&client).await?;
+    client.add_event_handler_context(rtc_session_manager.clone());
+    client.add_event_handler_context(command_prefix);
 
     client.add_event_handler(on_stripped_state_member);
     let response = client.sync_once(sync_settings.clone()).await?;

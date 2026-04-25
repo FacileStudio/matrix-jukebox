@@ -62,19 +62,37 @@ impl From<request_openid_token::v3::Response> for OpenIDTokenResponse {
     }
 }
 pub async fn get_prefered_foci(client: &Client) -> eyre::Result<PreferedFoci> {
-    let mut url = client.homeserver();
-    let client = client.http_client();
-    url.set_path(".well-known/matrix/client");
-    Ok(serde_json::from_slice::<PreferedFoci>(
-        &client
-            .get(url)
+    let http = client.http_client();
+
+    // Prefer querying well-known on the Matrix server name (e.g. matrix.org),
+    // then fall back to the resolved homeserver URL.
+    if let Some(user_id) = client.user_id() {
+        let mut server_well_known = Url::parse(&format!("https://{}", user_id.server_name()))?;
+        server_well_known.set_path(".well-known/matrix/client");
+
+        if let Ok(response) = http
+            .get(server_well_known)
             .timeout(Duration::from_secs(10))
             .send()
-            .await?
-            .error_for_status()?
-            .bytes()
-            .await?,
-    )?)
+            .await
+            .and_then(|resp| resp.error_for_status())
+        {
+            let bytes = response.bytes().await?;
+            return Ok(serde_json::from_slice::<PreferedFoci>(&bytes)?);
+        }
+    }
+
+    let mut homeserver_well_known = client.homeserver();
+    homeserver_well_known.set_path(".well-known/matrix/client");
+    let bytes = http
+        .get(homeserver_well_known)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+    Ok(serde_json::from_slice::<PreferedFoci>(&bytes)?)
 }
 
 pub async fn get_openid_token(client: &Client) -> eyre::Result<OpenIDTokenResponse> {
