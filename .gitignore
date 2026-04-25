@@ -1,5 +1,4 @@
 /target
-Cargo.lock
 /data
 config.yaml
 .vscode/launch.json
