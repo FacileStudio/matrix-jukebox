@@ -44,6 +44,14 @@ cp docs/config.example.yaml config.yaml
 - `client.password`: account password
 - `storage_base_dir`: writable directory for local bot data (for example `data`)
 
+You can also provide client credentials via environment variables (useful for Dokploy/secrets):
+
+- `MATRIX_SERVER_NAME` (or `MATRIX_JUKEBOX_SERVER_NAME`)
+- `MATRIX_USER_NAME` (or `MATRIX_JUKEBOX_USER_NAME`)
+- `MATRIX_PASSWORD` (or `MATRIX_JUKEBOX_PASSWORD`)
+
+When set, these env vars override values from `config.yaml`.
+
 4. Run the bot from the workspace root.
 
 ```bash
@@ -59,6 +67,8 @@ To use a different file:
 ```bash
 CONFIG_PATH=docs/config.yaml cargo run -p matrix-jukebox
 ```
+
+The app also accepts `MATRIX_JUKEBOX_CONFIG_PATH` as an alternative.
 
 ## First-run behavior
 

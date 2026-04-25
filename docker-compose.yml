@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  matrix-jukebox:
+    build: .
+    container_name: matrix-jukebox
+    restart: unless-stopped
+    
+    # Mount config and data directories
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    
+    # Logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    environment:
+      # Set these from Dokploy secrets/environment settings
+      MATRIX_SERVER_NAME: ${MATRIX_SERVER_NAME:-}
+      MATRIX_USER_NAME: ${MATRIX_USER_NAME:-}
+      MATRIX_PASSWORD: ${MATRIX_PASSWORD:-}
+      # RUST_LOG: debug  # Uncomment for debug logging
+      RUST_BACKTRACE: "1"

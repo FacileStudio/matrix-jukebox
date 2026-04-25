@@ -1,7 +1,0 @@
-bot:
-  command_prefix: "!"
-client:
-  server_name: "example.org"
-  user_name: "example"
-  password: "changeme"
-storage_base_dir: "data"

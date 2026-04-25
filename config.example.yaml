@@ -1,0 +1,11 @@
+bot:
+  command_prefix: "!"
+client:
+  # These can be omitted here and provided via env vars:
+  # MATRIX_SERVER_NAME / MATRIX_JUKEBOX_SERVER_NAME
+  # MATRIX_USER_NAME / MATRIX_JUKEBOX_USER_NAME
+  # MATRIX_PASSWORD / MATRIX_JUKEBOX_PASSWORD
+  server_name: ""
+  user_name: ""
+  password: ""
+storage_base_dir: "data"
