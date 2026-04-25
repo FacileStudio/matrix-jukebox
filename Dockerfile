@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 # Build stage
 FROM rust:latest as builder
 
@@ -9,8 +11,15 @@ COPY matrix-jukebox ./matrix-jukebox
 COPY matrix-rtc ./matrix-rtc
 COPY vendor ./vendor
 
-# Build the binary
-RUN cargo build --release --package matrix-jukebox
+# Make cargo more resilient to transient network issues.
+ENV CARGO_NET_RETRY=10
+ENV CARGO_HTTP_TIMEOUT=120
+ENV CARGO_HTTP_MULTIPLEXING=false
+
+# Fetch dependencies with host networking to avoid container DNS issues,
+# then build offline for determinism.
+RUN --network=host cargo fetch --locked
+RUN cargo build --release --locked --package matrix-jukebox --offline
 
 # Runtime stage
 FROM gcr.io/distroless/cc-debian12:nonroot
