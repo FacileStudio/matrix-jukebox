@@ -5,13 +5,14 @@ FROM rust:latest as builder
 
 WORKDIR /build
 
+COPY .cargo ./.cargo
 COPY Cargo.toml Cargo.lock ./
 COPY matrix-jukebox ./matrix-jukebox
 COPY matrix-rtc ./matrix-rtc
+COPY patches ./patches
 COPY vendor ./vendor
 
-RUN cargo fetch --locked
-RUN cargo build --release --locked --package matrix-jukebox --offline
+RUN cargo build --release --frozen --package matrix-jukebox
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 

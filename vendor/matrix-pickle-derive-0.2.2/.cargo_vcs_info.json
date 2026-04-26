@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "1eb91a7e6fcb4915d2cf2f0ed97f8e3fd074f2c7"
+  },
+  "path_in_vcs": "crates/matrix-pickle-derive"
+}

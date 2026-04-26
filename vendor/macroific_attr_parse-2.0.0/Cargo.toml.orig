@@ -1,0 +1,41 @@
+[package]
+name = "macroific_attr_parse"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.71.0"
+authors = [
+  "Art <amolc@pm.me>",
+]
+license = "Apache-2.0"
+readme = "README.md"
+
+description = "Attribute parsing utilities for the macroific crate"
+
+repository = "https://github.com/Alorel/macroific-rs"
+keywords = []
+categories = []
+include = [
+  "src/",
+  "Cargo.toml",
+]
+
+[features]
+full = ["syn/full"] # implement ParseOption for types requiring `syn/full`
+
+[dependencies]
+proc-macro2 = {workspace = true}
+quote = {workspace = true}
+sealed = { workspace = true }
+syn = {workspace = true}
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = [
+  "--cfg",
+  "doc_cfg",
+]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(doc_cfg)'] }

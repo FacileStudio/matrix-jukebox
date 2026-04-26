@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "1e5f5bf1cf09c342a16e2e7e2b9f30bf23c61cae"
+  },
+  "path_in_vcs": "crates/ruma-federation-api"
+}

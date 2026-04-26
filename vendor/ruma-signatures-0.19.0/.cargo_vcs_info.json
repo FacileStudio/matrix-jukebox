@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "9f6aaf054ecee97a4beba5f02eb87f049652dc05"
+  },
+  "path_in_vcs": "crates/ruma-signatures"
+}

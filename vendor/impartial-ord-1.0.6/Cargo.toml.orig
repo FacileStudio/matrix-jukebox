@@ -1,0 +1,31 @@
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package]
+name = "impartial-ord"
+version = "1.0.6"
+edition = "2021"
+rust-version = "1.56.0"
+authors = [
+  "Alorel <amolc@pm.me>",
+]
+license = "MIT"
+readme = "README.md"
+description = "Derives a quicker PartialOrd for types that already implement Ord"
+repository = "https://github.com/Alorel/impartial-ord-rs"
+keywords = ["derive", "ord", "partialord", "macro"]
+categories = ["development-tools"]
+include = [
+  "src/",
+  "Cargo.toml",
+]
+
+[lib]
+proc-macro = true
+
+[workspace]
+members = ["compilation-test"]
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = "2"

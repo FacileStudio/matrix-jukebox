@@ -3,4 +3,4 @@ resolver = "3"
 members = ["matrix-jukebox", "matrix-rtc"]
 
 [patch.crates-io]
-matrix-sdk = { path = "vendor/matrix-sdk" }
+matrix-sdk = { path = "patches/matrix-sdk" }

@@ -1,0 +1,36 @@
+[package]
+categories = ["api-bindings", "cryptography"]
+description = "Digital signatures according to the Matrix specification."
+homepage = "https://ruma.dev/"
+keywords = ["matrix", "chat", "messaging", "ruma", "cryptography"]
+license = "MIT"
+name = "ruma-signatures"
+readme = "README.md"
+repository = "https://github.com/ruma/ruma"
+version = "0.19.0"
+edition = "2024"
+rust-version = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+ring-compat = ["dep:memchr"]
+
+[dependencies]
+base64 = { workspace = true }
+ed25519-dalek = { version = "2.0.0", features = ["pkcs8", "rand_core"] }
+memchr = { version = "2.4", optional = true }
+pkcs8 = { version = "0.10.0", features = ["alloc"] }
+rand = { workspace = true }
+ruma-common = { workspace = true, features = ["canonical-json"] }
+serde_json = { workspace = true }
+sha2 = "0.10.6"
+thiserror = { workspace = true }
+
+[dev-dependencies]
+assert_matches2 = { workspace = true }
+insta = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,6 @@
+{
+  "git": {
+    "sha1": "49229220794470826ea4a8a035a6c22928809261"
+  },
+  "path_in_vcs": "crates/ruma-events"
+}
