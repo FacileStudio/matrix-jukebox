@@ -194,18 +194,22 @@ fn download_with_ytdlp(url: &str) -> eyre::Result<PathBuf> {
 
     debug!(tmp = %base_path.display(), "invoking yt-dlp");
 
-    let output = Command::new("yt-dlp")
-        .args([
-            "--no-playlist",
-            "--quiet",
-            "--format",
-            "bestaudio[ext=m4a]/bestaudio[ext=mp3]",
-            "--output",
-            &output_template,
-            "--print",
-            "after_move:filepath",
-            url,
-        ])
+    let mut cmd = Command::new("yt-dlp");
+    cmd.args([
+        "--no-playlist",
+        "--quiet",
+        "--cookies",
+        "/app/cookies.txt",
+        "--format",
+        "bestaudio[ext=m4a]/bestaudio[ext=mp3]",
+        "--output",
+        &output_template,
+        "--print",
+        "after_move:filepath",
+        url,
+    ]);
+
+    let output = cmd
         .output()
         .map_err(|e| eyre::eyre!("failed to spawn yt-dlp (is it installed?): {e}"))?;
 
