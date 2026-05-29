@@ -1,9 +1,12 @@
 services:
   matrix-jukebox:
-    build: .
+    build: 
+        context: .
+        dockerfile: Dockerfile
+        network: host
     container_name: matrix-jukebox
     restart: unless-stopped
-    
+        
     # Mount config and data directories
     volumes:
       - ./config.yaml:/app/config.yaml:ro
