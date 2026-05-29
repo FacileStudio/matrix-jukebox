@@ -12,13 +12,15 @@ COPY matrix-rtc ./matrix-rtc
 COPY patches ./patches
 COPY vendor ./vendor
 
-RUN cargo build --release --frozen --package matrix-jukebox
+RUN cargo build --release --frozen --package matrix-jukebox && \
+    mkdir -p /build/data
 
 FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 
 COPY --from=builder /build/target/release/matrix-jukebox /app/matrix-jukebox
+COPY --from=builder --chown=65532:65532 /build/data /app/data
 
 COPY config.example.yaml /app/config.yaml
 
