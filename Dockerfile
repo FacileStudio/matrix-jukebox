@@ -21,7 +21,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
     chmod +x /usr/local/bin/yt-dlp && \
     rm -rf /var/lib/apt/lists/*
 
-FROM gcr.io/distroless/cc-debian12:nonroot
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --no-create-home nonroot
 
 WORKDIR /app
 
@@ -32,5 +38,7 @@ COPY --from=builder --chown=65532:65532 /build/data /app/data
 COPY config.example.yaml /app/config.yaml
 
 ENV CONFIG_PATH=/app/config.yaml
+
+USER nonroot
 
 ENTRYPOINT ["/app/matrix-jukebox"]
