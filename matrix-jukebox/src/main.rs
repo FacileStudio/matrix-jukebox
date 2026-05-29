@@ -25,7 +25,7 @@ async fn main() -> eyre::Result<()> {
         // No session file means no known passphrase. Remove any orphaned DB
         // (e.g. from a previous crash before session.json was written) so the
         // fresh login doesn't try to open it with a new random passphrase.
-        let _ = fs::remove_file(data_dir.join(CLIENT_STORAGE_DB_PATH)).await;
+        let _ = fs::remove_dir_all(data_dir.join(CLIENT_STORAGE_DB_PATH)).await;
         (login(&config, data_dir, &session_file).await?, None)
     };
 
@@ -41,7 +41,7 @@ async fn main() -> eyre::Result<()> {
         if error_text.contains("M_UNKNOWN_TOKEN") || error_text.contains("Token is not active") {
             warn!("session is no longer valid, clearing local session and re-authenticating");
             let _ = fs::remove_file(&session_file).await;
-            let _ = fs::remove_file(data_dir.join(CLIENT_STORAGE_DB_PATH)).await;
+            let _ = fs::remove_dir_all(data_dir.join(CLIENT_STORAGE_DB_PATH)).await;
             let client = login(&config, data_dir, &session_file).await?;
             sync(client, None, &session_file, config.bot.command_prefix.clone()).await?;
         } else {
