@@ -10,7 +10,7 @@ services:
     # Mount config and data directories
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./data:/app/data
+      - jukebox-data:/app/data
     
     # Logs
     logging:
@@ -26,3 +26,6 @@ services:
       MATRIX_PASSWORD: ${MATRIX_PASSWORD:-}
       # RUST_LOG: debug  # Uncomment for debug logging
       RUST_BACKTRACE: "1"
+
+volumes:
+  jukebox-data:
