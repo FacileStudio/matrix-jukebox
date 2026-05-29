@@ -15,11 +15,18 @@ COPY vendor ./vendor
 RUN cargo build --release --frozen --package matrix-jukebox && \
     mkdir -p /build/data
 
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux \
+         -o /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp && \
+    rm -rf /var/lib/apt/lists/*
+
 FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 
 COPY --from=builder /build/target/release/matrix-jukebox /app/matrix-jukebox
+COPY --from=builder /usr/local/bin/yt-dlp /usr/local/bin/yt-dlp
 COPY --from=builder --chown=65532:65532 /build/data /app/data
 
 COPY config.example.yaml /app/config.yaml

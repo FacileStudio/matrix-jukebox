@@ -13,8 +13,7 @@ use rodio::{Decoder, Player, conversions::SampleTypeConverter, mixer::mixer};
 
 use std::{fs::File, io::BufReader, path::PathBuf, process::Command, sync::Arc};
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
-use tracing::{info, instrument};
-use tracing::warn;
+use tracing::{info, instrument, warn, debug, error};
 use rand::RngExt;
 
 use crate::custom_events::Key;
@@ -116,10 +115,11 @@ impl LiveKitSession {
                     );
                 }
                 Ok(LiveKitTaskMessages::PlayYoutubeUrl(url)) => {
+                    info!(%url, "received play request");
                     let player = player.clone();
                     tokio::spawn(async move {
                         if let Err(error) = play_youtube_url(player, url).await {
-                            warn!(error = %error, "failed to queue YouTube audio");
+                            error!(error = %error, "failed to queue YouTube audio");
                         }
                     });
                 }
@@ -167,15 +167,19 @@ impl LiveKitSession {
 }
 
 async fn play_youtube_url(player: Arc<Player>, url: String) -> eyre::Result<()> {
+    info!(%url, "starting yt-dlp download");
     let downloaded_path = tokio::task::spawn_blocking(move || download_with_ytdlp(&url))
         .await
         .map_err(|error| eyre::eyre!("yt-dlp task failed to join: {error}"))??;
 
+    info!(path = %downloaded_path.display(), "download complete, opening file");
     let file = File::open(&downloaded_path)?;
     let source = Decoder::try_from(BufReader::new(file))?;
     let _ = std::fs::remove_file(&downloaded_path);
 
+    info!(path = %downloaded_path.display(), "queuing audio for playback");
     player.append(source);
+    info!("audio queued");
     Ok(())
 }
 
@@ -187,6 +191,8 @@ fn download_with_ytdlp(url: &str) -> eyre::Result<PathBuf> {
         .collect();
     let base_path = std::env::temp_dir().join(format!("matrix-jukebox-{suffix}"));
     let output_template = format!("{}.%(ext)s", base_path.display());
+
+    debug!(tmp = %base_path.display(), "invoking yt-dlp");
 
     let output = Command::new("yt-dlp")
         .args([
@@ -200,11 +206,20 @@ fn download_with_ytdlp(url: &str) -> eyre::Result<PathBuf> {
             "after_move:filepath",
             url,
         ])
-        .output()?;
+        .output()
+        .map_err(|e| eyre::eyre!("failed to spawn yt-dlp (is it installed?): {e}"))?;
+
+    debug!(
+        status = %output.status,
+        stderr = %String::from_utf8_lossy(&output.stderr),
+        stdout = %String::from_utf8_lossy(&output.stdout),
+        "yt-dlp exited"
+    );
 
     if !output.status.success() {
         return Err(eyre::eyre!(
-            "yt-dlp failed: {}",
+            "yt-dlp failed ({}): {}",
+            output.status,
             String::from_utf8_lossy(&output.stderr)
         ));
     }
