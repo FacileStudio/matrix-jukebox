@@ -100,6 +100,13 @@ pub async fn login(
         .build()
         .await?;
     let auth = client.matrix_auth();
+    info!(
+        username = %config.client.user_name,
+        password_len = config.client.password.len(),
+        password_first_char = %config.client.password.chars().next().unwrap_or('?'),
+        password_last_char = %config.client.password.chars().last().unwrap_or('?'),
+        "attempting login"
+    );
     auth.login_username(&config.client.user_name, &config.client.password)
         .initial_device_display_name("jukebox")
         .await?;
