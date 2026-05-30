@@ -9,7 +9,6 @@ services:
         
     volumes:
       - jukebox-data:/app/data
-      - ./cookies.txt:/app/cookies.txt:ro
     
     # Logs
     logging:

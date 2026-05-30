@@ -11,9 +11,9 @@ use livekit::{
 };
 use rodio::{Decoder, Player, conversions::SampleTypeConverter, mixer::mixer};
 
-use std::{fs::File, io::BufReader, path::PathBuf, process::Command, sync::Arc};
+use std::{fs::File, io::BufReader, path::{Path, PathBuf}, process::Command, sync::Arc};
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
-use tracing::{info, instrument, warn, debug, error};
+use tracing::{info, instrument, debug, error};
 use rand::RngExt;
 
 use crate::custom_events::Key;
@@ -194,12 +194,14 @@ fn download_with_ytdlp(url: &str) -> eyre::Result<PathBuf> {
 
     debug!(tmp = %base_path.display(), "invoking yt-dlp");
 
+    let cookies_path = Path::new("/app/data/cookies.txt");
+
     let mut cmd = Command::new("yt-dlp");
+    cmd.args(["--no-playlist", "--quiet"]);
+    if cookies_path.is_file() {
+        cmd.args(["--cookies", "/app/data/cookies.txt"]);
+    }
     cmd.args([
-        "--no-playlist",
-        "--quiet",
-        "--cookies",
-        "/app/cookies.txt",
         "--format",
         "bestaudio[ext=m4a]/bestaudio[ext=mp3]",
         "--output",
