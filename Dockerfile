@@ -21,7 +21,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certifi
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
+        ca-certificates curl unzip \
+    && curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh \
+    && apt-get purge -y curl unzip && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 65532 nonroot \
     && useradd --uid 65532 --gid 65532 --no-create-home nonroot
