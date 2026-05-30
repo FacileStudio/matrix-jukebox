@@ -4,7 +4,6 @@ services:
         context: .
         dockerfile: Dockerfile
         network: host
-    container_name: matrix-jukebox
     restart: unless-stopped
         
     volumes:
